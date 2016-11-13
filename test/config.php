@@ -15,7 +15,7 @@ return [
     "max_connection_per_topic" => 1, // TODO
 
     // "max_connection_per_nsqd" => // ceil(max(count(NSQDs), max_connection_per_topic) / count(NSQDs)), // 到每台nsqd机器的最大连接数
-    "enable_backoff" => true,
+    "enable_backoff" => false, // TODO
 
     // prod机器 /proc/sys/net/core/rmem_max = /proc/sys/net/core/wmem_max = 327679
     "socket_buffer_size" => 327679,

@@ -124,14 +124,15 @@ class SQS implements Bootable
             } else {
                 $resp = (yield $producer->multiPublish($messages));
             }
+        // TODO 立即返回
+//            if ($resp === "OK") {
+//                yield true;
+//            } else {
+//                $msgStr = implode("//", $messages);
+//                sys_echo("publish fail, [topic=>$topic, msg=$msgStr, resp=$resp]");
+//                yield false;
+//            }
 
-            if ($resp === "OK") {
-                yield true;
-            } else {
-                $msgStr = implode("//", $messages);
-                sys_echo("publish fail, [topic=>$topic, msg=$msgStr, resp=$resp]");
-                yield false;
-            }
 //        } else {
             // 等待连接~
 //            $args = func_get_args();
