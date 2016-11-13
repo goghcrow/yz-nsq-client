@@ -9,7 +9,7 @@ use swoole_buffer as SwooleBuffer;
  * Class Buffer
  *
  * 自动扩容, 从尾部写入数据，从头部读出数据
- * 参考 Muduo buffer
+ * 参考 
  *
  * +-------------------+------------------+------------------+
  * | prependable bytes |  readable bytes  |  writable bytes  |
@@ -26,9 +26,6 @@ class Buffer
     private $readerIndex;
 
     private $writerIndex;
-
-    // TODO prepend
-    private $cheapPrependable = 8;
 
     public static function ofBytes($bytes)
     {
@@ -246,72 +243,3 @@ static PHP_METHOD(swoole_buffer, read)
     SW_RETURN_STRINGL(buffer->str + offset, length, 1);
 }
 */
-
-
-//$buffer = new Buffer(5);
-//$buffer->write("1234");
-//assert($buffer->read(1) === "1");
-//assert($buffer->__toString() === "234");
-//$buffer->write("56");
-//assert($buffer->__toString() === "23456");
-//assert($buffer->writableBytes() === 0);
-//assert($buffer->capacity() === 5);
-//assert($buffer->read(2) === "23");
-//assert($buffer->prependableBytes() === 2);
-//assert($buffer->writableBytes() === 0);
-//$buffer->write("789");
-//assert($buffer->prependableBytes() === 0);
-//assert($buffer->readableBytes() === 6);
-//assert($buffer->writableBytes() === 6);
-
-
-
-// performance test: write
-
-//$start = microtime(true);
-//ini_set("memory_limit", "1024M");
-
-
-//$buffer = [];
-//for ($i = 0; $i < 1000000; $i++) {
-//    $buffer[] = $i;
-//}
-//$buffer = implode("", $buffer);
-/*
-0.39955115318298
-6148448
-7077888
-150539936
-150994944
-*/
-
-
-//$buffer = "";
-//for ($i = 0; $i < 1000000; $i++) {
-//    $buffer .= $i;
-//}
-/*
-0.176265001297
-6147256
-6553600
-6150848
-6553600
- */
-
-//$buffer = new Buffer(1024);
-//for ($i = 0; $i < 1000000; $i++) {
-//    $buffer->write($i);
-//}
-/**
-1.4449348449707
-260232
-524288
-264376
-524288
- */
-
-//echo microtime(true) - $start, "\n";
-//echo memory_get_usage(), "\n";
-//echo memory_get_usage(true), "\n";
-//echo memory_get_peak_usage(), "\n";
-//echo memory_get_peak_usage(true), "\n";

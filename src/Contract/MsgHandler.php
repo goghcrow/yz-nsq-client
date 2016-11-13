@@ -1,6 +1,9 @@
 <?php
 
-namespace Zan\Framework\Components\Nsq;
+namespace Zan\Framework\Components\Contract\Nsq;
+
+use Zan\Framework\Components\Nsq\Consumer;
+use Zan\Framework\Components\Nsq\Message;
 
 
 /**
@@ -16,18 +19,20 @@ interface MsgHandler
 {
     /**
      * @param Message $message
-     * @return bool
+     * @param Consumer $consumer
+     * @return bool When the return value is == true Consumer will automatically handle FINishing.
      *
      * When the return value is == true Consumer will automatically handle FINishing.
      * When the returned value is == false Consumer will automatically handle REQueing.
      */
-    public function handleMessage(Message $message);
+    public function handleMessage(Message $message, Consumer $consumer);
 
     /**
      * will be called when a message is deemed "failed"
      * (i.e. the number of attempts exceeded the Consumer specified MaxAttemptCount)
      * @param Message $message
+     * @param Consumer $consumer
      * @return mixed
      */
-    public function logFailedMessage(Message $message);
+    public function logFailedMessage(Message $message, Consumer $consumer);
 }

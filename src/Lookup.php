@@ -2,28 +2,486 @@
 
 namespace Zan\Framework\Components\Nsq;
 
+use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
+use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Common\HttpClient;
 use Zan\Framework\Network\Common\Response;
+use Zan\Framework\Network\Server\Timer\Timer;
 
 
 class Lookup
 {
-    private $addr;
+    private $topic;
 
-    public function __construct($addr)
+    private $isStopped = false;
+
+    /**
+     * @var Connection[] map<string, Connection>
+     */
+    private $pendingConnections = [];
+
+    /**
+     * @var Connection[] map<string, Connection>
+     */
+    private $idleConnections = [];
+
+    /**
+     * @var Connection[]
+     */
+    private $busyConnections = [];
+
+    /**
+     * connecting or connected
+     * @var string[] map<string, int> [ "host:port" => conn_num, ]
+     */
+    private $nsqdTCPAddrsConnNum = [];
+
+    /**
+     * max connection in current lookup
+     * @var int
+     */
+    private $maxConnectionNum = 0;
+
+    /**
+     * @var NsqdDelegate
+     */
+    private $delegate;
+
+    /**
+     * @var string[]  map<string, int> [ "http://nsq-dev.s.qima-inc.com:4161" => nsqd_num, ... ]
+     */
+    private $lookupdHTTPAddrs = [];
+    private $lookupdQueryIndex = 0; // for round-robin
+
+
+    public function __construct($topic, $maxConnectionNum = 1)
     {
-        $this->addr = $addr;
+        $this->topic = Command::checkTopicChannelName($topic);
+        $this->maxConnectionNum = $maxConnectionNum;
     }
 
-    public function queryNsqd($topic)
+    public function setNsqdDelegate(NsqdDelegate $delegate)
+    {
+        $this->delegate = $delegate;
+    }
+
+    /**
+     * ConnectToNSQLookupd adds an nsqlookupd address to the list for this Consumer instance.
+     * If it is the first to be added, it initiates an Tick Timer to discover nsqd
+     * producers for the configured topic.
+     *
+     * @param string $addr
+     * @return \Generator|void Connection[]
+     * @throws NsqException
+     */
+    public function connectToNSQLookupd($addr)
+    {
+        if ($this->isStopped) {
+            throw new NsqException("consumer stopped");
+        }
+
+        $addr = $this->formatAddress($addr);
+        if (isset($this->lookupdHTTPAddrs[$addr])) {
+            return;
+        }
+
+        $this->lookupdHTTPAddrs[$addr] = [];
+        yield $this->queryLookupd($addr);
+
+        if (count($this->lookupdHTTPAddrs) === 1) {
+            // reconnecting will be triggered on connection close,
+            // so no need to check number of connections in tick timer
+            $this->lookupdPollingTick();
+        }
+    }
+
+    /**
+     * DisconnectFromNSQLookupd removes the specified `nsqlookupd` address
+     * from the list used for periodic discovery and close all nsqd connection
+     * discover from the address
+     *
+     * @param string $addr
+     * @return void
+     * @throws NsqException
+     */
+    public function disconnectFromNSQLookupd($addr)
+    {
+        $addr = $this->formatAddress($addr);
+        if (!isset($this->lookupdHTTPAddrs[$addr])) {
+            throw new NsqException("not connected");
+        }
+
+        if (count($this->lookupdHTTPAddrs) === 1) {
+            throw new NsqException("cannot disconnect from only remaining nsqlookupd HTTP address $addr");
+        }
+
+        unset($this->lookupdHTTPAddrs[$addr]);
+
+        foreach ($this->getConnections() as $conn) {
+            if ($conn->getLookupAddr() === $addr) {
+                $conn->tryClose();
+            }
+        }
+    }
+
+    /**
+     * make an HTTP req to one of the configured nsqlookupd instances (Round-Robin)
+     * to discover which nsqd's provide the topic we are consuming.
+     * initiate a connection to any new producers that are identified.
+     * @param null|string $lookupdAddr
+     * @return mixed
+     */
+    private function queryLookupd($lookupdAddr = null)
+    {
+        $nsqdList = [];
+        $lookupdAddr = $lookupdAddr ?: $this->nextLookupdEndpoint();
+        if ($lookupdAddr === null) {
+            return;
+        }
+
+        try {
+            $nsqdList = (yield static::lookupNsqdList($lookupdAddr, $this->topic));
+            foreach ($nsqdList as list($host, $port)) {
+                if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
+                    $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
+                }
+            }
+            $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
+            $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
+        } catch (\Exception $ex) {
+            sys_echo("($lookupdAddr) error query nsqd - {$ex->getMessage()}");
+        }
+
+        // TODO parallel connect
+        foreach ($nsqdList as list($host, $port)) {
+            try {
+                /* @var Connection[] $conns */
+                $conns = (yield $this->connectToNSQD($host, $port));
+                foreach ($conns as $conn) {
+                    $conn->setLookupAddr($lookupdAddr);
+                    if ($this->delegate) {
+                        $this->delegate->onConnect($conn);
+                    }
+                }
+            } catch (\Exception $ex) {
+                sys_echo("($host:$port) error connecting to nsqd - {$ex->getMessage()}");
+            }
+        }
+        return; // for ide
+    }
+
+    /**
+     * an Tick Timer to discover nsqd producers for the configured topic.
+     * @return void
+     */
+    private function lookupdPollingTick()
+    {
+        // add some jitter
+        $jitter = (float)rand() / (float)getrandmax()
+            * NsqConfig::getLookupdPollJitter()
+            * NsqConfig::getLookupdPollInterval();
+
+        Timer::after(intval($jitter) + 1, function() {
+            if ($this->isStopped) {
+                return;
+            }
+
+            Timer::tick(NsqConfig::getLookupdPollInterval(), function() {
+                try {
+                    Task::execute($this->queryLookupd());
+                } catch (\Exception $ex) {
+                    sys_echo("lookupdPolling exception {$ex->getMessage()}");
+                }
+            }, $this->lookupdPollingTickId());
+        });
+    }
+
+    /**
+     * ConnectToNSQD takes a nsqd address to connect directly to.
+     * It is recommended to use ConnectToNSQLookupd so that topics are discovered
+     * automatically.  This method is useful when you want to connect to a single, local, instance.
+     * @param string $host
+     * @param string $port
+     * @return mixed yield List<Connection>
+     * @throws NsqException
+     * @throws \Exception
+     */
+    public function connectToNSQD($host, $port)
+    {
+        if ($this->isStopped) {
+            throw new NsqException("consumer stopped");
+        }
+
+        $addr = "$host:$port";
+        if (!isset($this->nsqdTCPAddrsConnNum[$addr])) {
+            $this->nsqdTCPAddrsConnNum[$addr] = 0;
+        }
+
+        $perNsqdMaxNum = $this->getMaxConnNumPerNsqd();
+        $currentNum = $this->nsqdTCPAddrsConnNum[$addr];
+        $remainNum = max($perNsqdMaxNum - $currentNum, 0);
+
+        $nsqdConns = [];
+        for ($i = 0; $i < $remainNum; $i++)
+        {
+            try {
+                $this->nsqdTCPAddrsConnNum[$addr]++;
+
+                $conn = new Connection($host, $port);
+                $hash = spl_object_hash($conn);
+
+                try {
+                    $this->pendingConnections[$hash] = $conn;
+                    yield $conn->connect();
+                    $this->idleConnections[$hash] = $conn;
+                } finally {
+                    unset($this->pendingConnections[$hash]);
+                }
+
+                $nsqdConns[] = $conn;
+            } catch (\Exception $ex) {
+                $this->nsqdTCPAddrsConnNum[$addr]--;
+                throw $ex;
+            }
+        }
+        yield $nsqdConns;
+        return;
+    }
+
+    /**
+     * DisconnectFromNSQD closes the connection to and removes the specified
+     * `nsqd` address from the list
+     * @param string $host
+     * @param int $port
+     * @return void
+     * @throws NsqException
+     */
+    public function disconnectFromNSQD($host, $port)
+    {
+        $key = "$host:$port";
+        if (!isset($this->nsqdTCPAddrsConnNum[$key])) {
+            throw new NsqException("not connected");
+        }
+
+        foreach ($this->getConnections() as $conn) {
+            if ($conn->getHost() === $host && $conn->getPort() === $port) {
+                $conn->tryClose();
+            }
+        }
+        $this->nsqdTCPAddrsConnNum[$key] = 0;
+    }
+
+    public function disconnectFromNSQDConn(Connection $conn)
+    {
+        $hash = spl_object_hash($conn);
+        if (isset($this->pendingConnections[$hash])) {
+            $this->pendingConnections[$hash]->tryClose();
+        }
+        if (isset($this->idleConnections[$hash])) {
+            $this->idleConnections[$hash]->tryClose();
+        }
+        if (isset($this->busyConnections[$hash])) {
+            $this->busyConnections[$hash]->tryClose();
+        }
+        $this->nsqdTCPAddrsConnNum[$conn->getAddr()]--;
+    }
+
+    public function reconnect(Connection $conn)
+    {
+        if ($conn->isDisposable()) {
+            yield false;
+            return;
+        }
+
+        $hash = spl_object_hash($conn);
+        $addr = $conn->getLookupAddr();
+
+        $reconnect = isset($this->idleConnections[$hash]) || isset($this->busyConnections[$hash]);
+        $isQueryLookupd = isset($this->lookupdHTTPAddrs[$addr]) || ($addr === null && count($this->lookupdHTTPAddrs) > 0);
+
+        if ($isQueryLookupd) {
+            try {
+                // trigger a poll of the lookupd
+                yield $this->queryLookupd();
+                yield true;
+            } catch (\Exception $ex) {
+                sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$ex->getMessage()}");
+                yield false;
+            }
+        } else if ($reconnect) {
+            // there are no lookupd and we still have this nsqd TCP address in our list...
+            // try to reconnect after a bit
+            $this->delayReconnect($conn);
+            yield false;
+        }
+    }
+
+    private function delayReconnect(Connection $conn)
+    {
+        Timer::after(NsqConfig::getLookupdPollInterval(), function() use($conn) {
+            if ($this->isStopped) {
+                return;
+            }
+            $hash = spl_object_hash($conn);
+            $reconnect = isset($this->idleConnections[$hash]) || isset($this->busyConnections[$hash]);
+            if (!$reconnect) {
+                return;
+            }
+
+            try {
+                Task::execute($this->connectToNSQD($conn->getHost(), $conn->getPort()));
+            } catch (\Exception $ex) {
+                sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$ex->getMessage()}");
+            }
+        });
+    }
+
+    /**
+     * @return \Generator
+     * @throws NsqException
+     */
+    public function take()
+    {
+        if (empty($this->nsqdTCPAddrsConnNum)) {
+            throw new NsqException("no nsqd address found");
+        }
+
+        if (empty($this->idleConnections)) {
+            goto disposableConn;
+        }
+
+        $key = array_rand($this->idleConnections);
+        $conn = $this->idleConnections[$key];
+        if ($conn->tryTake()) {
+            $this->busyConnections[$key] = $conn;
+            unset($this->idleConnections[$key]);
+            yield [$conn];
+        } else {
+            disposableConn:
+            list($host, $port) = explode(":", array_rand($this->nsqdTCPAddrsConnNum));
+            list($conn) = (yield Connection::getDisposable($host, $port));
+            if ($this->delegate) {
+                $this->delegate->onConnect($conn);
+            }
+            yield [$conn];
+        }
+    }
+
+    public function release(Connection $conn)
+    {
+        $key = spl_object_hash($conn);
+        if ($conn->tryRelease())  {
+            unset($this->busyConnections[$key]);
+            $this->idleConnections[$key] = $conn;
+        }
+    }
+
+    /**
+     * @return Connection[]
+     */
+    public function getNSQDConnections()
+    {
+        return $this->idleConnections + $this->busyConnections;
+    }
+
+    public function getNSQDAddrConnNum()
+    {
+        return $this->nsqdTCPAddrsConnNum;
+    }
+
+    public function getLookupdHTTPAddrs()
+    {
+        return $this->lookupdHTTPAddrs;
+    }
+
+    public function removeConnection(Connection $conn)
+    {
+        $key = spl_object_hash($conn);
+        unset($this->pendingConnections[$key]);
+        unset($this->idleConnections[$key]);
+        unset($this->busyConnections[$key]);
+        $this->nsqdTCPAddrsConnNum[$conn->getAddr()]--;
+    }
+
+    public function stop()
+    {
+        $this->isStopped = true;
+        Timer::clearTickJob($this->lookupdPollingTickId());
+    }
+
+    public function isStopped()
+    {
+        return $this->isStopped;
+    }
+
+    public function getTopic()
+    {
+        return $this->topic;
+    }
+
+    private function getConnections()
+    {
+        return $this->pendingConnections + $this->busyConnections + $this->idleConnections;
+    }
+
+    private function formatAddress($addr)
+    {
+        $scheme = parse_url($addr, PHP_URL_SCHEME);
+        $host = parse_url($addr, PHP_URL_HOST);
+        $port = parse_url($addr, PHP_URL_PORT) ?: 80;
+        if (!$scheme || !$host) {
+            throw new NsqException("invalid address $addr");
+        }
+        $host = strtolower($host);
+        return "$scheme://$host:$port";
+    }
+
+    /**
+     * (i + 1) mod n
+     * @return string
+     */
+    private function nextLookupdEndpoint()
+    {
+        $num = count($this->lookupdHTTPAddrs);
+        if ($num === 0) {
+            return null;
+        }
+
+        if ($this->lookupdQueryIndex >= $num) {
+            $this->lookupdQueryIndex = 0;
+        }
+
+        $address = array_keys($this->lookupdHTTPAddrs)[$this->lookupdQueryIndex];
+        $this->lookupdQueryIndex = ($this->lookupdQueryIndex + 1) % $num;
+        return $address;
+    }
+
+    /**
+     * @return int
+     */
+    private function getMaxConnNumPerNsqd()
+    {
+        $nsqdNum = count($this->nsqdTCPAddrsConnNum);
+        if ($nsqdNum === 0) {
+            return 0;
+        }
+        return ceil($this->maxConnectionNum / $nsqdNum);
+    }
+
+    /**
+     * @param string $addr
+     * @param string $topic
+     * @return \Generator
+     */
+    public static function lookupNsqdList($addr, $topic)
     {
         Command::checkTopicChannelName($topic);
 
         /* @var \Zan\Framework\Network\Common\Response $resp */
-        $host = parse_url($this->addr, PHP_URL_HOST);
-        $port = parse_url($this->addr, PHP_URL_PORT) ?: 80;
+        $host = parse_url($addr, PHP_URL_HOST);
+        $port = parse_url($addr, PHP_URL_PORT) ?: 80;
 
-        $host = (yield Dns::lookup($host, 1000));// ?: $host;
+        // $host = (yield Dns::lookup($host, 1000));
         $httpClient = new HttpClient($host, $port);
         $resp = (yield $httpClient->get("/lookup", ["topic" => $topic], NsqConfig::getNsqlookupdConnectTimeout()));
         $data = static::validLookupdResp($resp);
@@ -53,5 +511,10 @@ class Lookup
             throw new NsqException("queryLookupd failed, invalid resp [body=$body]");
         }
         return $respArr["data"];
+    }
+
+    private function lookupdPollingTickId()
+    {
+        return spl_object_hash($this) . "_lookupd_polling_tick_id";
     }
 }

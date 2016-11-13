@@ -1,7 +1,10 @@
 <?php
 
-namespace Zan\Framework\Components\Nsq;
+namespace Zan\Framework\Components\Contract\Nsq;
 
+
+use Zan\Framework\Components\Nsq\Connection;
+use Zan\Framework\Components\Nsq\Message;
 
 interface ConnDelegate
 {
@@ -15,15 +18,6 @@ interface ConnDelegate
     public function onResponse(Connection $conn, $bytes);
 
     /**
-     * OnError is called when the connection
-     * receives a FrameTypeError from nsqd
-     * @param Connection $conn
-     * @param $bytes
-     * @return mixed
-     */
-    public function onError(Connection $conn, $bytes);
-
-    /**
      * OnMessage is called when the connection
      * receives a FrameTypeMessage from nsqd
      * @param Connection $conn
@@ -31,6 +25,15 @@ interface ConnDelegate
      * @return mixed
      */
     public function onMessage(Connection $conn, Message $msg);
+
+    /**
+     * OnError is called when the connection
+     * receives a FrameTypeError from nsqd
+     * @param Connection $conn
+     * @param $bytes
+     * @return mixed
+     */
+    public function onError(Connection $conn, $bytes);
 
     /**
      * OnMessageFinished is called when the connection
@@ -51,15 +54,16 @@ interface ConnDelegate
     public function onMessageRequeued(Connection $conn, Message $msg);
 
     /**
-     * OnBackoff is called when the connection triggers a backoff state
+     * OnBackoff is called when the connection
+     * triggers a backoff state
      * @param Connection $conn
      * @return mixed
      */
     public function onBackoff(Connection $conn);
 
     /**
-     * OnContinue is called when the connection f
-     * inishes a message without adjusting backoff state
+     * OnContinue is called when the connection
+     * finishes a message without adjusting backoff state
      * @param Connection $conn
      * @return mixed
      */
@@ -91,8 +95,7 @@ interface ConnDelegate
     public function onHeartbeat(Connection $conn);
 
     /**
-     * OnClose is called when the connection
-     * closes, after all cleanup
+     * OnClose is called when the connection closes
      * @param Connection $conn
      * @return mixed
      */

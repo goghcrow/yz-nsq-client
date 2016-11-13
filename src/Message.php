@@ -2,7 +2,9 @@
 
 namespace Zan\Framework\Components\Nsq;
 
+use Zan\Framework\Components\Contract\Nsq\MsgDelegate;
 use Zan\Framework\Components\Nsq\Utils\Binary;
+use Zan\Framework\Utilities\Types\Time;
 
 
 class Message
@@ -32,21 +34,16 @@ class Message
 
     private $isResponded = false;
 
-    private $autoResponseDisabled;
+    private $autoResponse = true;
 
     /**
      * @var MsgDelegate
      */
     private $delegate;
 
-    public function __construct($bytes, ConnMsgDelegate $delegate)
+    public function __construct($bytes, MsgDelegate $delegate)
     {
         $this->unpack($bytes);
-        $this->delegate = $delegate;
-    }
-
-    public function setDelegate(ConnMsgDelegate $delegate)
-    {
         $this->delegate = $delegate;
     }
 
@@ -84,17 +81,13 @@ class Message
 
     /**
      * DisableAutoResponse disables the automatic response that
-     * would normally be sent when a handler.HandleMessage
-     * returns (FIN/REQ based on the error value returned).
-     *
-     * This is useful if you want to batch, buffer, or asynchronously
-     * respond to messages.
-     *
-     * @return bool
+     * would normally be sent when a MsgHandler:;handleMessage
+     * returns (FIN/REQ based on the value returned).
+     * @return void
      */
     public function disableAutoResponse()
     {
-        return $this->autoResponseDisabled = false;
+        $this->autoResponse = false;
     }
 
     /**
@@ -102,9 +95,9 @@ class Message
      * will be responded to automatically
      * @return bool
      */
-    public function isAutoResponseDisabled()
+    public function isAutoResponse()
     {
-        return $this->autoResponseDisabled === false;
+        return $this->autoResponse;
     }
 
     /**
@@ -132,7 +125,7 @@ class Message
      */
     public function touch()
     {
-        if ($this->hasResponsed()) {
+        if ($this->isResponded) {
             return;
         }
         $this->delegate->onTouch($this);
@@ -149,7 +142,8 @@ class Message
      */
     public function requeue($delay)
     {
-        $this->doRequeue($delay, true);
+        $this->isResponded = true;
+        $this->delegate->onRequeue($this, $delay, true);
     }
 
     /**
@@ -162,13 +156,8 @@ class Message
      */
     public function requeueWithoutBackoff($delay)
     {
-        $this->doRequeue($delay, false);
-    }
-
-    private function doRequeue($delay, $backoff)
-    {
         $this->isResponded = true;
-        $this->delegate->onRequeue($this, $delay, $backoff);
+        $this->delegate->onRequeue($this, $delay, false);
     }
 
     /**
@@ -197,6 +186,23 @@ class Message
         $this->attempts = $binary->readUInt16BE();
         $this->id = $binary->read(16);
         $this->body = $binary->readFull();
+    }
+
+    /**
+     * For Debug
+     * @param string $id
+     * @param int $attempts
+     * @param string $body
+     * @return Binary
+     */
+    public static function pack($id, $attempts, $body)
+    {
+        $binary = new Binary();
+        $binary->writeUInt64BE(Time::stamp());
+        $binary->writeUInt16BE(intval($attempts));
+        $binary->write(str_pad($id, 16, "\0", STR_PAD_RIGHT));
+        $binary->write($body);
+        return $binary;
     }
 
     public function __toString()

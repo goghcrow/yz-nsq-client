@@ -46,22 +46,22 @@ class Binary extends Buffer
 
     public function writeInt32BE($i)
     {
-        $this->write(pack('N', $i));
+        return $this->write(pack('N', $i));
     }
 
     public function writeInt32LE($i)
     {
-        $this->write(pack('V', $i));
+        return $this->write(pack('V', $i));
     }
 
     public function writeFloat($f)
     {
-        $this->write(pack('f', $f));
+        return $this->write(pack('f', $f));
     }
 
     public function writeDouble($d)
     {
-        $this->write(pack('d', $d));
+        return $this->write(pack('d', $d));
     }
 
     public function readUInt8()

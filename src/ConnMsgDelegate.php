@@ -2,6 +2,8 @@
 
 namespace Zan\Framework\Components\Nsq;
 
+use Zan\Framework\Components\Contract\Nsq\MsgDelegate;
+
 class ConnMsgDelegate implements MsgDelegate
 {
     /**

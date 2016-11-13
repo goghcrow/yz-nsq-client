@@ -16,9 +16,7 @@ class Dns implements Async
 
         $timeoutId = Timer::after($timeout, function() use($self, $domain, $timeout) {
             if ($self->callback) {
-                // no ex
-                // call_user_func($self->callback, $domain, new ConnectTimeoutException("Dns lookup timeout {$timeout}ms"));
-                call_user_func($self->callback, null, null);
+                call_user_func($self->callback, $domain, new ConnectTimeoutException("Dns lookup timeout {$timeout}ms"));
                 unset($self->callback);
             }
         });

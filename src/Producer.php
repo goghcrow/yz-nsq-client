@@ -3,76 +3,86 @@
 namespace Zan\Framework\Components\Nsq;
 
 
+use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
+use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
 use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Foundation\Core\Debug;
+use Zan\Framework\Foundation\Coroutine\Task;
+use Zan\Framework\Network\Server\Timer\Timer;
 
-class Producer implements ConnDelegate, Async
+
+class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
 {
-    const StateInit = 0;
-    const StateDisconnected = 1;
-    const StateConnected = 2;
+    // TODO
+    // private $callback;
+
+    private $topic;
+
+    private $lookup;
+
+    public function __construct($topic, $maxConnectionNum = 1)
+    {
+        $this->topic = Command::checkTopicChannelName($topic);
+        $this->lookup = new Lookup($this->topic, $maxConnectionNum);
+        $this->lookup->setNsqdDelegate($this);
+    }
+
+    public function connectToNSQLookupds(array $addresses)
+    {
+        foreach ($addresses as $address) {
+            yield $this->connectToNSQLookupd($address);
+        }
+    }
+
+    public function connectToNSQLookupd($address)
+    {
+        yield $this->lookup->connectToNSQLookupd($address);
+    }
+
+    public function disconnectFromNSQLookupd($addr)
+    {
+        $this->lookup->disconnectFromNSQLookupd($addr);
+    }
+
+    public function connectToNSQD($host, $port)
+    {
+        yield $this->lookup->connectToNSQD($host, $port);
+    }
+
+    public function disconnectFromNSQD($host, $port)
+    {
+        $this->lookup->disconnectFromNSQD($host, $port);
+    }
+
+    public function getNsqdConns()
+    {
+        return $this->lookup->getNSQDConnections();
+    }
 
     /**
-     * @var Connection
+     * @return \Generator
      */
-    private $conn;
-
-    private $state;
-
-    private $host;
-
-    private $port;
-
-    private $callback;
-
-    public function __construct($host, $port)
+    private function take()
     {
-        $this->host = $host;
-        $this->port = $port;
-        $this->state = static::StateInit;
+        yield $this->lookup->take();
+    }
+
+    private function release(Connection $conn)
+    {
+        $this->lookup->release($conn);
     }
 
     /**
-     * Ping causes the Producer to connect to it's configured nsqd (if not already
-     * connected) and send a `Nop` command
-     *
-     * This method can be used to verify that a newly-created Producer instance is
-     * configured correctly, rather than relying on the lazy "connect on Publish"
-     * behavior of a Producer.
+     * @param Connection $conn
+     * @return \Generator
      */
-    public function ping()
+    private function reconnectToNSQD(Connection $conn)
     {
-        if ($this->state !== static::StateConnected) {
-            yield $this->connect();
-        }
-
-        yield $this->conn->ping();
-    }
-
-    public function connect()
-    {
-        switch ($this->state) {
-            case static::StateInit:
-                break;
-            case static::StateConnected:
-                return;
-            default:
-                throw new NsqException("not connected");
-        }
-
-        $this->conn = new Connection($this->host, $this->port, $this);
-        yield $this->conn->connect();
-        $this->state = static::StateConnected;
-    }
-
-    public function stop()
-    {
-        return $this->conn->tryClose();
+        yield $this->lookup->reconnect($conn);
     }
 
     /**
      * Publish a message to a topic
-     * @param string $topic
      * @param string $body
      * @throws NsqException
      * @return \Generator
@@ -85,20 +95,24 @@ class Producer implements ConnDelegate, Async
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function publish($topic, $body)
+    public function publish($body)
     {
-        Command::checkTopicChannelName($topic);
-        if ($this->state !== static::StateConnected) {
-            yield $this->connect();
-        }
-        $this->conn->writeCmd(Command::publish($topic, $body));
-        yield $this;
+        /* @var Connection $conn */
+        list($conn) = (yield $this->take());
+        // 这里收到的第一个response是identity的, 所以错了
+        $conn->writeCmd(Command::publish($this->topic, $body));
+
+        // TODO
+//        Timer::after(NsqConfig::getPublishTimeout(), function() {
+//            call_user_func($this->callback, null, new NsqException("publish timeout"));
+//        }, $this->getPublishTimeoutTimerId($conn));
+//
+//        yield $this;
     }
 
     /**
      * Publish multiple messages to a topic (atomically)
      * (useful for high-throughput situations to avoid roundtrips and saturate the pipe)
-     * @param $topic
      * @param array $messages
      * @throws NsqException
      * @return \Generator
@@ -112,14 +126,29 @@ class Producer implements ConnDelegate, Async
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function multiPublish($topic, array $messages)
+    public function multiPublish(array $messages)
     {
-        Command::checkTopicChannelName($topic);
-        if ($this->state !== static::StateConnected) {
-            yield $this->connect();
-        }
-        $this->conn->writeCmd(Command::multiPublish($topic, $messages));
-        yield $this;
+        /* @var Connection $conn */
+        list($conn) = (yield $this->take());
+        $conn->writeCmd(Command::multiPublish($this->topic, $messages));
+
+        // TODO
+//        Timer::after(NsqConfig::getPublishTimeout(), function() {
+//            call_user_func($this->callback, null, new NsqException("publish timeout"));
+//        }, $this->getPublishTimeoutTimerId($conn));
+//
+//        yield $this;
+    }
+
+
+    /**
+     * onConnected is called when nsqd connects
+     * @param Connection $conn
+     * @return void
+     */
+    public function onConnect(Connection $conn)
+    {
+        $conn->setDelegate($this);
     }
 
     /**
@@ -131,8 +160,13 @@ class Producer implements ConnDelegate, Async
      */
     public function onResponse(Connection $conn, $bytes)
     {
-        call_user_func($this->callback, $bytes, null);
-        // TODO 释放连接
+        $this->onPublishResponse($conn, $bytes);
+
+        if ($bytes === "CLOSE_WAIT") {
+            // nsqd ack客户端的StartClose, 准备关闭
+            // 可以假定不会再收到任何nsqd的消息
+            $conn->tryClose();
+        }
     }
 
     /**
@@ -144,8 +178,7 @@ class Producer implements ConnDelegate, Async
      */
     public function onError(Connection $conn, $bytes)
     {
-        call_user_func($this->callback, null, new NsqException($bytes));
-        // TODO 释放连接
+        $this->onPublishResponse($conn, null, new NsqException($bytes));
     }
 
     /**
@@ -157,7 +190,14 @@ class Producer implements ConnDelegate, Async
      */
     public function onIOError(Connection $conn, \Exception $ex)
     {
-        $this->conn->tryClose();
+        $this->onPublishResponse($conn, null, $ex);
+
+        try {
+            $this->lookup->removeConnection($conn);
+            $conn->tryClose();
+        } catch (\Exception $ignore) {
+            sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$ex->getMessage()}");
+        }
     }
 
     /**
@@ -169,23 +209,51 @@ class Producer implements ConnDelegate, Async
      */
     public function onClose(Connection $conn)
     {
-        call_user_func($this->callback, null, new NsqException("conn closed"));
+        $this->onPublishResponse($conn, null, null);
+
+        if (!$conn->isDisposable()) {
+            $this->lookup->removeConnection($conn);
+
+            $remainConnNum = count($this->getNsqdConns());
+            sys_echo("nsq({$conn->getAddr()}) producer onClose: there are $remainConnNum connections left alive");
+
+            if ($this->lookup->isStopped()/* && $remainConnNum === 0*/) {
+                return;
+            }
+
+            Task::execute($this->reconnectToNSQD($conn));
+        }
+    }
+
+    private function onPublishResponse(Connection $conn, $retval, \Exception $ex = null)
+    {
+        Timer::clearAfterJob($this->getPublishTimeoutTimerId($conn));
+        $this->release($conn);
+        // TODO
+        // call_user_func($this->callback, $retval, $ex);
     }
 
     public function onReceive(Connection $conn, $bytes) {
         if (Debug::get()) {
-            // sys_echo("nsq({$conn->getAddr()}) rev:" . str_replace("\n", "\\n", $bytes));
+            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
         }
     }
+
     public function onSend(Connection $conn, $bytes) {
         if (Debug::get()) {
             sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
         }
     }
 
-    public function execute(callable $callback, $task)
+    // TODO
+//    public function execute(callable $callback, $task)
+//    {
+//        $this->callback = $callback;
+//    }
+
+    private function getPublishTimeoutTimerId(Connection $conn)
     {
-        $this->callback = $callback;
+        return sprintf("%s_%s_public_time_out", spl_object_hash($this), spl_object_hash($conn));
     }
 
     public function onHeartbeat(Connection $conn) {}

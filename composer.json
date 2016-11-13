@@ -78,6 +78,14 @@
         "files": [
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Zan\\Framework\\Components\\Nsq\\Test\\": "test/"
+        },
+        "classmap": [
+
+        ]
+    },
     "config": {
         "preferred-install": "dist",
         "secure-http": false

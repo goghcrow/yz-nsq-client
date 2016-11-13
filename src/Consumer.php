@@ -3,6 +3,9 @@
 namespace Zan\Framework\Components\Nsq;
 
 
+use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
+use Zan\Framework\Components\Contract\Nsq\MsgHandler;
+use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
 use Zan\Framework\Components\Nsq\Utils\Backoff;
 use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Foundation\Coroutine\Task;
@@ -10,19 +13,14 @@ use Zan\Framework\Network\Server\Timer\Timer;
 use Zan\Framework\Utilities\Types\Time;
 
 
-/**
- * Class Consumer
- * @package Zan\Framework\Components\Nsq
- *
- * Consumer : Connection = 1 : N (one nsqd one connection)
- */
-class Consumer implements ConnDelegate
+class Consumer implements ConnDelegate, NsqdDelegate
 {
     const BackoffSignal = 0;
     const ContinueSignal = 1;
     const ResumeSignal = 2;
 
     // 同时接受消息的最大数量
+    // 每个nsqd连接均分
     private $maxInFlight; // limit
 
     // 该消费者当前总的RDY数量
@@ -31,17 +29,9 @@ class Consumer implements ConnDelegate
     // 当某连接发送新RDY, 则总量加上(新RDY - RDY存量) : $this->totalRdyCount += $count - $conn->getRDY();
     private $totalRdyCount = 0;
 
-    // TODO 为什么需要两个
     // 当前backoff持续时间, backoff之后尝试恢复
     private $backoffDuration;
     private $backoffCounter; // backoff次数,attempts
-
-    // connected to nsqlookupd or nsqd, prevent add msghandler after connected
-    private $isConnected;
-    private $isStopped;
-
-    private $topic;
-    private $channel;
 
     /**
      * 是否需要在多个连接间重新分配RDY
@@ -50,32 +40,6 @@ class Consumer implements ConnDelegate
 	private $needRDYRedistributed = false;
 
     /**
-     * 未完成nsqd连接列表
-     * @var Connection[] map<string, Connection> [ "host:port" => conn ]
-     */
-    private $pendingConnections = [];
-
-    /**
-     * nsqd连接列表
-     * @var Connection[] map<string, Connection> [ "host:port" => conn ]
-     */
-    private $connections = [];
-
-    /**
-     * nsqd地址列表
-     * @var string[] set [ "host:port" => true, ]
-     */
-	private $nsqdTCPAddrs = [];
-
-    /**
-     * NSQLookup地址列表
-     * @var string[] [ "http://nsq-dev.s.qima-inc.com:4161", ...... ]
-     */
-	private $lookupdHTTPAddrs = [];
-	private $lookupdQueryIndex = 0;
-
-    /**
-     * RDY状态更新重试计时器列表
      * @var array map<string, Timer>  [timerId => timer]
      */
     private $rdyRetryTimers = [];
@@ -86,14 +50,20 @@ class Consumer implements ConnDelegate
     private $msgHandler;
 
     /**
-     * 消息统计数据
-     * @var array
+     * @var Lookup
      */
+    private $lookup;
+
+    private $topic;
+
+    private $channel;
+
     private $stats;
+
 
     /**
      * Consumer constructor.
-     * @param string $topic
+     * @param $topic
      * @param string $channel
      * @param MsgHandler $msgHandler
      */
@@ -103,6 +73,10 @@ class Consumer implements ConnDelegate
         $this->channel = Command::checkTopicChannelName($channel);
         $this->maxInFlight = NsqConfig::getMaxInFlightCount();
         $this->msgHandler = $msgHandler;
+
+        $this->lookup = new Lookup($this->topic);
+        $this->lookup->setNsqdDelegate($this);
+
         $this->stats = [
             "messagesReceived" => 0,
             "messagesFinished" => 0,
@@ -113,33 +87,69 @@ class Consumer implements ConnDelegate
     }
 
     /**
+     * @param $address
+     * @return \Generator Consumer
+     */
+    public function connectToNSQLookupd($address)
+    {
+        yield $this->lookup->connectToNSQLookupd($address);
+        yield $this;
+    }
+
+    /**
+     * @param array $addresses
+     * @return \Generator Consumer
+     */
+    public function connectToNSQLookupds(array $addresses)
+    {
+        foreach ($addresses as $address) {
+            yield $this->connectToNSQLookupd($address);
+        }
+        yield $this;
+    }
+
+    public function disconnectFromNSQLookupd($addr)
+    {
+        $this->lookup->disconnectFromNSQLookupd($addr);
+    }
+
+    public function connectToNSQD($host, $port)
+    {
+        yield $this->lookup->connectToNSQD($host, $port);
+    }
+
+    public function disconnectFromNSQD($host, $port)
+    {
+        $this->lookup->disconnectFromNSQD($host, $port);
+    }
+
+    private function getNsqdConns()
+    {
+        return $this->lookup->getNSQDConnections();
+    }
+
+    /**
      * 统计信息
      * @return array
      */
     public function stats()
     {
-        return $this->stats + ["connections" => count($this->connections)];
-    }
+        $nsqdConn = $this->lookup->getNSQDAddrConnNum();
+        $lookupds = $this->lookup->getLookupdHTTPAddrs();
 
-    /**
-     * 消费者实例的某个连接是否阻塞()而不能接受新消息
-     * 比如RDY=0且连接未close
-     * 阻塞: 上次RDY数量的85%以上都在处理中
-     *
-     * @return bool
-     */
-    public function isStarved()
-    {
-        /* @var Connection $conn */
-        foreach ($this->connections as $conn) {
-            $threshold = intval($conn->lastRDY() * 0.85);
-            $inFlight = $conn->getMsgInFlight();
-
-            if ($inFlight >= $threshold && $inFlight > 0 && !$conn->isClosing()) {
-                return true;
+        foreach ($lookupds as $url => $nsqds) {
+            $ret = [];
+            foreach ($nsqds as $i => $nsqd) {
+                $addr = implode(":", $nsqd);
+                $ret[$addr] = $nsqdConn[$addr];
             }
+            $lookupds[$url] = $ret;
         }
-        return false;
+
+        return $this->stats + [
+            // "nsqdConnections_" => count($this->getNsqdConns()),
+            "lookupNsqConnections" => $lookupds,
+        ];
     }
 
     /**
@@ -156,228 +166,34 @@ class Consumer implements ConnDelegate
         }
 
         $this->maxInFlight = max(0, intval($maxInFlight));
-        foreach ($this->connections as $conn) {
+
+        foreach ($this->getNsqdConns() as $conn) {
             $this->maybeUpdateRDY($conn);
         }
     }
 
     /**
-     * 连接NSQLookupd, 并且把改nsq地址加入消费者实例地址列表
-     * 如果是加入的第一个lookupd地址
-     *  则发起http请求发现topic的nsqd地址
-     *  启动tick定期是持续更新nsqd地址变化
+     * 消费者实例的某个连接是否处于饥饿状态
+     * 比如RDY=0且连接未close
+     * 阻塞: 上次RDY数量的85%以上都在处理中
      *
-     * @param string $address
-     * @return \Generator|void
-     * @throws NsqException
-     */
-    public function connectToNSQLookupd($address)
-    {
-        if ($this->isStopped) {
-            throw new NsqException("consumer stopped");
-        }
-        $address = $this->formatAddress($address);
-
-        $this->isConnected = true;
-
-        if (in_array($address, $this->lookupdHTTPAddrs, true)) {
-            yield true;
-            return;
-        }
-        $this->lookupdHTTPAddrs[] = $address;
-
-        if (count($this->lookupdHTTPAddrs) === 1) {
-            yield $this->queryLookupd();
-            $this->lookupdPolling();
-        }
-    }
-
-    /**
-     * 支持多个NSQLookup地址
-     * @param array $addresses
-     * @return \Generator
-     */
-    public function connectToNSQLookupds(array $addresses)
-    {
-        foreach ($addresses as $address) {
-            yield $this->connectToNSQLookupd($address);
-        }
-    }
-
-    private function formatAddress($addr)
-    {
-        $scheme = parse_url($addr, PHP_URL_SCHEME);
-        $host = parse_url($addr, PHP_URL_HOST);
-        $port = parse_url($addr, PHP_URL_PORT) ?: 80;
-        if (!$scheme || !$host) {
-            throw new NsqException("invalid address $addr");
-        }
-        $host = strtolower($host);
-        return "$scheme://$host:$port";
-    }
-
-    /**
-     * 从周期性检查列表中移除某个NSQLookupd地址
-     *
-     * @param string $addr
      * @return bool
-     * @throws NsqException
      */
-    public function disconnectFromNSQLookupd($addr)
+    public function isStarved()
     {
-        if (!in_array($addr, $this->lookupdHTTPAddrs, true)) {
-            throw new NsqException("not connected");
-        }
+        foreach ($this->getNsqdConns() as $conn) {
+            $threshold = intval($conn->lastRDY() * 0.85);
+            $inFlight = $conn->getMsgInFlight();
 
-        if (count($this->lookupdHTTPAddrs) === 1) {
-            throw new NsqException("cannot disconnect from only remaining nsqlookupd HTTP address $addr");
-        }
-
-        foreach ($this->lookupdHTTPAddrs as $i => $addr_) {
-            if ($addr === $addr_) {
-                unset($this->lookupdHTTPAddrs[$i]);
+            if ($inFlight >= $threshold && $inFlight > 0 && !$conn->isClosing()) {
                 return true;
             }
         }
         return false;
     }
 
-    /**
-     * 定时轮询所有nsq lookup服务器
-     * @return void
-     */
-    private function lookupdPolling()
-    {
-        $this->bootLookupdPolling(function() {
-            try {
-                Task::execute($this->queryLookupd());
-            } catch (\Exception $ex) {
-                sys_echo("lookupdPolling exception {$ex->getMessage()}");
-            }
-        });
-    }
-
-    private function bootLookupdPolling(callable $callback)
-    {
-        // add some jitter
-        $rand = (float)rand() / (float)getrandmax();
-        $jitter = $rand * NsqConfig::getLookupdPollJitter() * NsqConfig::getLookupdPollInterval();
-        Timer::after(intval($jitter), function() use($callback) {
-            if ($this->isStopped) {
-                return;
-            }
-            $interval = NsqConfig::getLookupdPollInterval();
-            Timer::tick($interval, $callback, $this->lookupdPollingTickId());
-        });
-    }
-
-    /**
-     * Round-Robin轮询方式获取一个lookupd地址,
-     * http请求获取订阅topic的所有nsqd地址, 连接所有nsqd地址并订阅
-     * @return mixed
-     */
-    private function queryLookupd()
-    {
-        $nsqdList = [];
-
-        $endpoint = $this->nextLookupdEndpoint();
-        try {
-            $lookup = new Lookup($endpoint);
-            $nsqdList = (yield $lookup->queryNsqd($this->topic));
-        } catch (\Exception $ex) {
-            sys_echo("($endpoint) error query nsqd - {$ex->getMessage()}");
-        }
-        foreach ($nsqdList as list($host, $port)) {
-            try {
-                yield $this->connectToNSQD($host, $port);
-                // Task::execute($this->connectToNSQD($host, $port)); // 并发连接
-            } catch (\Exception $ex) {
-                sys_echo("($host:$port) error connecting to nsqd - {$ex->getMessage()}");
-            }
-        }
-        return;
-    }
-
-    /**
-     * 记录当前使用并返回下一个lookup地址
-     * (i + 1) mod n
-     * @return string
-     */
-    private function nextLookupdEndpoint()
-    {
-        $num = count($this->lookupdHTTPAddrs);
-        if ($this->lookupdQueryIndex >= $num) {
-            $this->lookupdQueryIndex = 0;
-        }
-        $address = $this->lookupdHTTPAddrs[$this->lookupdQueryIndex];
-        $this->lookupdQueryIndex = ($this->lookupdQueryIndex + 1) % $num;
-        return $address;
-    }
-
-    /**
-     * 直连NSQD实例
-     * 建议连接NSQLookupd, 自动发现topic对应的nsqd实例
-     * @param string $host
-     * @param int $port
-     * @return mixed
-     * @throws \Exception
-     */
-    public function connectToNSQD($host, $port)
-    {
-        if ($this->isStopped) {
-            throw new NsqException("consumer stopped");
-        }
-        $this->isConnected = true;
-
-        $conn = new Connection($host, $port, $this);
-        $addr = $conn->getAddr();
-        if (isset($this->pendingConnections[$addr]) || isset($this->connections[$addr])) {
-            throw new NsqException("$addr already connected");
-        }
-
-        $this->pendingConnections[$addr] = $conn;
-        $this->nsqdTCPAddrs[$addr] = true;
-
-        try {
-            yield $conn->connect();
-            $conn->writeCmd(Command::subscribe($this->topic, $this->channel));
-            $this->connections[$addr] = $conn;
-        } finally {
-            unset($this->pendingConnections[$addr]);
-        }
-
-        // 加入新连接重新调整所有连接rdy状态
-        foreach ($this->connections as $conn) {
-            $this->maybeUpdateRDY($conn);
-        }
-        return;
-    }
-
-    /**
-     * 断开NSQD连接
-     * @param string $host
-     * @param int $port
-     * @return bool
-     * @throws NsqException
-     */
-    public function disconnectFromNSQD($host, $port)
-    {
-        $key = "$host:$port";
-        if (!isset($this->nsqdTCPAddrs[$key])) {
-            throw new NsqException("not connected");
-        }
-
-        unset($this->nsqdTCPAddrs[$key]);
-        if (isset($this->connections[$key])) {
-            return $this->connections[$key]->tryClose();
-        } else if (isset($this->pendingConnections[$key])) {
-            return $this->pendingConnections[$key]->tryClose();
-        }
-
-        return false;
-    }
-
-    private function startStopContinueBackoff(Connection $conn, $signal)
+    private function startStopContinueBackoff(/** @noinspection PhpUnusedParameterInspection */
+        Connection $conn, $signal)
     {
         // 避免大量成功或失败的结果, 保证backoff期间不连续增减backoffCounter
         if ($this->inBackoffTimeout()) {
@@ -410,7 +226,7 @@ class Consumer implements ConnDelegate
             $count = $this->perConnMaxInFlight();
             sys_echo("exiting backoff, returning all to RDY $count");
 
-            foreach ($this->connections as $conn) {
+            foreach ($this->getNsqdConns() as $conn) {
                 $this->updateRDY($conn, $count);
             }
         } else if ($this->backoffCounter > 0) {
@@ -419,7 +235,7 @@ class Consumer implements ConnDelegate
             $backoffDuration = min(NsqConfig::getMaxBackoffDuration(), $backoffDuration);
             sys_echo("backing off for ${backoffDuration}ms (backoff level {$this->backoffCounter}), setting all to RDY 0");
 
-            foreach ($this->connections as $conn) {
+            foreach ($this->getNsqdConns() as $conn) {
                 $this->updateRDY($conn, 0);
             }
             $this->backoff($backoffDuration);
@@ -442,19 +258,19 @@ class Consumer implements ConnDelegate
     private function resume()
     {
         return function() {
-            if ($this->isStopped) {
+            if ($this->lookup->isStopped()) {
                 $this->backoffDuration = 0;
                 return;
             }
 
             // pick a random connection to test the waters
-            $connCount = count($this->connections);
+            $connCount = count($this->getNsqdConns());
             if ($connCount === 0) {
                 $this->backoff(1000);
                 return;
             }
 
-            $choice = $this->connections[array_rand($this->connections)];
+            $choice = $this->getNsqdConns()[array_rand($this->getNsqdConns())];
 
             // while in backoff only ever let 1 message at a time through
             try {
@@ -514,8 +330,12 @@ class Consumer implements ConnDelegate
      */
     private function perConnMaxInFlight()
     {
+        $connNum = count($this->getNsqdConns());
+        if ($connNum === 0) {
+            return 0;
+        }
         $max = $this->maxInFlight;
-        $per = $this->maxInFlight / count($this->connections);
+        $per = $this->maxInFlight / $connNum;
         return intval(min(max(1, $per), $max));
     }
 
@@ -533,7 +353,7 @@ class Consumer implements ConnDelegate
                     return;
                 }
 
-                $connNum = count($this->connections);
+                $connNum = count($this->getNsqdConns());
                 if ($connNum === 0) {
                     return;
                 }
@@ -561,7 +381,7 @@ class Consumer implements ConnDelegate
         $this->needRDYRedistributed = false;
 
         $possibleConns = [];
-        foreach ($this->connections as $conn) {
+        foreach ($this->getNsqdConns() as $conn) {
             $lastMsgDuration = Time::stamp() - $conn->lastMessageTime();
             // 尚有未收到的rdy(可能消息已消费完) && 最后一次收到消息距离现在已超过n毫秒
             // 则该连接暂时暂停接受消息
@@ -599,7 +419,9 @@ class Consumer implements ConnDelegate
     private function updateRDY(Connection $conn, $count)
     {
         if ($conn->isClosing()) {
-            throw new NsqException("already closed");
+            // count($this->getNsqdConns())
+            /** @noinspection PhpInconsistentReturnPointsInspection */
+            return;
         }
 
         $count = min($count, $conn->maxRDY());
@@ -617,7 +439,7 @@ class Consumer implements ConnDelegate
             $count = $maxPossibleRdy;
         }
 
-        // todo why < 0
+        // todo ? < 0
         if ($maxPossibleRdy <= 0 && $count > 0) {
             if ($remainRdy === 0) {
                 // 我们想要离开zeroRDY状态,但是不能
@@ -653,12 +475,14 @@ class Consumer implements ConnDelegate
 
     public function stop()
     {
-        $this->isStopped = true;
-        if (count($this->connections) === 0) {
+        $this->lookup->stop();
+        Timer::clearTickJob($this->rdyLoopTickId());
+
+        if (count($this->getNsqdConns()) === 0) {
             return;
         }
 
-        foreach ($this->connections as $conn) {
+        foreach ($this->getNsqdConns() as $conn) {
             try {
                 $conn->writeCmd(Command::startClose());
             } catch (\Exception $ex) {
@@ -666,10 +490,11 @@ class Consumer implements ConnDelegate
             }
         }
 
-        Timer::after(5000, function() {
-            // stop lookupdPolling and rdyLoop
-            Timer::clearTickJob($this->lookupdPollingTickId());
-            Timer::clearTickJob($this->rdyLoopTickId());
+        Timer::after(NsqConfig::getDelayingCloseTime(), function() {
+            foreach ($this->getNsqdConns() as $nsqdConn) {
+                // 这里会重复发CLS ~
+                $nsqdConn->tryClose();
+            }
         });
     }
 
@@ -679,7 +504,7 @@ class Consumer implements ConnDelegate
         $attempts = $msg->getAttempts();
         if ($maxAttempts > 0 && $attempts > $maxAttempts) {
             sys_echo("msg {$msg->getId()} attempted {$attempts} times, giving up");
-            $this->msgHandler->logFailedMessage($msg);
+            $this->msgHandler->logFailedMessage($msg, $this);
             return true;
         }
 
@@ -694,8 +519,8 @@ class Consumer implements ConnDelegate
         }
 
         try {
-            $success = (yield $this->msgHandler->handleMessage($msg));
-            if ($msg->isAutoResponseDisabled()) {
+            $success = (yield $this->msgHandler->handleMessage($msg, $this));
+            if (!$msg->isAutoResponse()) {
                 return;
             }
             if ($success) {
@@ -711,6 +536,38 @@ class Consumer implements ConnDelegate
             $msg->requeue(-1);
         } else {
             $msg->requeueWithoutBackoff(-1);
+        }
+    }
+
+    /**
+     * onConnected is called when nsqd connects
+     * @param Connection $conn
+     * @return void
+     */
+    public function onConnect(Connection $conn)
+    {
+        // 加入新连接重新调整所有连接rdy状态
+        $conn->setDelegate($this);
+        $conn->writeCmd(Command::subscribe($this->topic, $this->channel));
+        $this->maybeUpdateRDY($conn);
+    }
+
+    /**
+     * @param Connection $conn
+     * @return \Generator
+     */
+    private function reconnectToNSQD(Connection $conn)
+    {
+        try {
+            yield $this->lookup->reconnect($conn);
+
+            $conn->writeCmd(Command::subscribe($this->topic, $this->channel));
+
+            foreach ($this->getNsqdConns() as $conn) {
+                $this->maybeUpdateRDY($conn);
+            }
+        } catch (\Exception $ex) {
+            sys_echo("nsq({$conn->getAddr()}) reconnectToNSQD exception: {$ex->getMessage()}");
         }
     }
 
@@ -838,9 +695,9 @@ class Consumer implements ConnDelegate
             $hasRDYRetryTimer = true;
         }
 
-        unset($this->connections[$conn->getAddr()]);
+        $this->lookup->removeConnection($conn);
 
-        $remainConnNum = count($this->connections);
+        $remainConnNum = count($this->getNsqdConns());
         sys_echo("nsq consumer onClose: there are $remainConnNum connections left alive");
 
         // TODO
@@ -850,55 +707,16 @@ class Consumer implements ConnDelegate
             $this->needRDYRedistributed = true;
         }
 
-        // 最后一个连接退出
-        if ($this->isStopped && $remainConnNum === 0) {
+        if ($this->lookup->isStopped()/* && $remainConnNum === 0*/) {
             return;
         }
 
         // nsqd连接断开重新连接
-        $this->reconnect($conn);
+        Task::execute($this->reconnectToNSQD($conn));
     }
-
-    private function reconnect(Connection $conn)
-    {
-        $numLookupd = count($this->lookupdHTTPAddrs);
-        $reconnect = isset($this->nsqdTCPAddrs[$conn->getAddr()]);
-
-        if ($numLookupd > 0) {
-
-            // 触发一次lookup查询, 因为nsqd连接断开, 可能该nsqd实例已经下线
-            Task::execute($this->queryLookupd());
-
-        } else if ($reconnect) {
-
-            // 没有lookupd只有nsqd地址, 则尝试5s后重新连接
-            Timer::after(5000, function() use($conn) {
-                if ($this->isStopped) {
-                    return;
-                }
-                $reconnect = isset($this->nsqdTCPAddrs[$conn->getAddr()]);
-                if (!$reconnect) {
-                    return;
-                }
-
-                try {
-                    Task::execute($this->connectToNSQD($conn->getHost(), $conn->getPort()));
-                } catch (\Exception $ex) {
-                    sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - " . $ex->getMessage());
-                }
-            });
-
-        }
-    }
-
 
     public function onHeartbeat(Connection $conn) {}
     public function onError(Connection $conn, $bytes) {}
-
-    private function lookupdPollingTickId()
-    {
-        return spl_object_hash($this) . "_lookupd_polling_tick_id";
-    }
 
     private function rdyLoopTickId()
     {
@@ -912,7 +730,7 @@ class Consumer implements ConnDelegate
 
     public function onReceive(Connection $conn, $bytes) {
         if (Debug::get()) {
-             // sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
         }
     }
 
