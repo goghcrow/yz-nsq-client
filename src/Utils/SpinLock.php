@@ -1,17 +1,17 @@
 <?php
 
-namespace Utils;
+namespace Zan\Framework\Components\Nsq\Utils;
 
 
 /**
  * Class SpinLock
  * @package Utils
  *
- *  SpinLock::lock(__CLASS__);
+ *  yield SpinLock::lock(__CLASS__);
  *  try {
  *      // do something
  *  } finally {
- *     SpinLock::unlock(__CLASS__);
+ *     yield SpinLock::unlock(__CLASS__);
  *  }
  */
 final class SpinLock
@@ -19,9 +19,12 @@ final class SpinLock
     private $locked = false;
 
     /**
+     * TODO memory leak, unset unused lock
      * @var static[] map<string, SpinLock>
      */
-    private static $lock;
+    private static $lockIns;
+
+    private function __construct() { }
 
     private function lock_($ms = 1)
     {
@@ -46,10 +49,10 @@ final class SpinLock
      */
     private static function get($lockName)
     {
-        if (!isset(static::$lock[$lockName])) {
-            static::$lock[$lockName] = new static;
+        if (!isset(static::$lockIns[$lockName])) {
+            static::$lockIns[$lockName] = new static;
         }
-        return static::$lock[$lockName];
+        return static::$lockIns[$lockName];
     }
 
     public static function lock($lockName, $ms = 1)

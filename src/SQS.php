@@ -3,8 +3,8 @@
 namespace Zan\Framework\Components\Nsq;
 
 
-use Utils\SpinLock;
 use Zan\Framework\Components\Contract\Nsq\MsgHandler;
+use Zan\Framework\Components\Nsq\Utils\SpinLock;
 use Zan\Framework\Contract\Network\Bootable;
 use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;

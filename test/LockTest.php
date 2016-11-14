@@ -2,6 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
+use Zan\Framework\Components\Nsq\Utils\Lock;
 use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;
 
@@ -50,14 +51,14 @@ class OnceTest1
 
 
 // final result 每次运行的结果都可能不一样
-//$task = function() {
-//    $tasks = [];
-//    for ($i = 0; $i < 10; $i++) {
-//        $tasks[] = OnceTest1::task("hello", $i);
-//    }
-//    yield parallel($tasks);
-//    echo "final result: " . OnceTest1::get("hello"), "\n";
-//};
+$task = function() {
+    $tasks = [];
+    for ($i = 0; $i < 10; $i++) {
+        $tasks[] = OnceTest1::task("hello", $i);
+    }
+    yield parallel($tasks);
+    echo "final result: " . OnceTest1::get("hello"), "\n";
+};
 //Task::execute($task());
 
 
@@ -416,8 +417,6 @@ class SpinLock3
 
 class OnceTest5
 {
-    public static $afterUnlock = 100;
-
     private static $raceData = [];
 
     public static function get($key)
@@ -427,7 +426,7 @@ class OnceTest5
 
     public static function task($key, $id)
     {
-        yield SpinLock3::lock(__CLASS__, static::$afterUnlock);
+        yield SpinLock3::lock(__CLASS__);
         if (!isset(static::$raceData[$key])) {
             yield static::asyncSetOnce($key, $id);
         }
@@ -451,6 +450,114 @@ $task = function() {
     echo "final result: " . OnceTest5::get("hello"), "\n";
 };
 
-OnceTest5::$afterUnlock = 1000000;
-Task::execute($task());
+//Task::execute($task());
 
+
+
+
+class OnceTest6
+{
+    public static $afterUnlock = 100;
+
+    private static $raceData = [];
+
+    public static function get($key)
+    {
+        return static::$raceData[$key];
+    }
+
+    public static function task($key, $id)
+    {
+        yield Lock::lock(__CLASS__);
+        if (!isset(static::$raceData[$key])) {
+            yield static::asyncSetOnce($key, $id);
+        }
+        yield Lock::unlock(__CLASS__);
+    }
+
+    private static function asyncSetOnce($key, $value)
+    {
+        // echo __FUNCTION__ . "($key, $value)", "\n";
+        yield taskSleep(10 * rand(1, 10));
+        static::$raceData[$key] = $value;
+    }
+}
+
+$task = function() {
+    $tasks = [];
+    for ($i = 0; $i < 10; $i++) {
+        $tasks[] = OnceTest6::task("hello", $i);
+    }
+     try {
+          yield parallel($tasks);
+     } catch (\Exception $ex) {
+         echo_exception($ex);
+    }
+     echo "final result: " . OnceTest6::get("hello"), "\n";
+};
+
+//Task::execute($task());
+
+
+
+
+
+class OnceTest7
+{
+    public static $afterUnlock = 100;
+
+    private static $raceData = [];
+
+    public static function get($key)
+    {
+        return static::$raceData[$key];
+    }
+
+    public static function task($key, $id)
+    {
+        yield Lock::lock(__CLASS__);
+        if (!isset(static::$raceData[$key])) {
+            yield static::asyncSetOnce($key, $id);
+        }
+        yield Lock::unlock(__CLASS__);
+
+        throw new \Exception("xx");
+    }
+
+    private static function asyncSetOnce($key, $value)
+    {
+        // echo __FUNCTION__ . "($key, $value)", "\n";
+        yield taskSleep(10 * rand(1, 10));
+        static::$raceData[$key] = $value;
+    }
+}
+
+$task = function() {
+    $tasks = [];
+    for ($i = 0; $i < 10; $i++) {
+        $tasks[] = OnceTest7::task("hello", $i);
+    }
+    try {
+        // BUG 并行时异常只捕获第一个task
+         yield parallel($tasks);
+
+//        $taskWithCatch = function($i) {
+//            try {
+//                yield OnceTest7::task("hello", $i);
+//            } catch (\Exception $ex) {
+//                echo_exception($ex);
+//            }
+//        };
+//        for ($i = 0; $i < 10; $i++) {
+//            Task::execute($taskWithCatch($i));
+//        }
+//        swoole_timer_after(200, function() {
+//            echo "final result: " . OnceTest7::get("hello"), "\n";
+//        });
+    } catch (\Exception $ex) {
+        echo_exception($ex);
+    }
+//     echo "final result: " . OnceTest6::get("hello"), "\n";
+};
+
+//Task::execute($task());

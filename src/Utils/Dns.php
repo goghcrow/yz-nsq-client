@@ -1,6 +1,6 @@
 <?php
 
-namespace Zan\Framework\Components\Nsq;
+namespace Zan\Framework\Components\Nsq\Utils;
 
 use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Network\Connection\Exception\ConnectTimeoutException;
