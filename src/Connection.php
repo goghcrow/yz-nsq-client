@@ -83,12 +83,6 @@ class Connection implements Async
         yield [$conn];
     }
 
-    public static $i = 0;
-    public function __destruct()
-    {
-        static::$i--;
-    }
-
     /**
      * Connection constructor.
      * @param $host
@@ -97,8 +91,6 @@ class Connection implements Async
      */
     public function __construct($host, $port, ConnDelegate $delegate = null)
     {
-        static::$i++;
-        sys_echo(__METHOD__ . ":" . static::$i);
         $this->host = $host;
         $this->port = $port;
         if ($delegate === null) {
@@ -172,7 +164,7 @@ class Connection implements Async
     {
         return function () {
             $timeout = NsqConfig::getNsqdConnectTimeout();
-            call_user_func($this->callback, null, new NsqException("nsq({$this->host}:{$this->port})connect timeout [time=$timeout]"));
+            call_user_func($this->callback, null, new NsqException("nsq({$this->host}:{$this->port}) connect timeout [time=$timeout]"));
         };
     }
 
@@ -347,7 +339,6 @@ class Connection implements Async
         SwooleClient $client, $bytes)
     {
         try {
-            // TODO onReceive ?!
             $this->delegate->onReceive($this, $bytes);
             $frame = new Frame($bytes);
             $this->confirmIdentity($frame);
@@ -386,12 +377,7 @@ class Connection implements Async
 
         success:
         $this->client->on("receive", [$this, "onReceive"]);
-        // TODO remove
-        try {
-            call_user_func($this->callback, $this, null);
-        } catch (\Exception $ex) {
-            echo_exception($ex);
-        }
+        call_user_func($this->callback, $this, null);
         return;
     }
 
@@ -463,19 +449,29 @@ class Connection implements Async
 
     private function onError()
     {
+        /**
+         * swoole Client.c
+         * static int swClient_onError(swReactor *reactor, swEvent *event)
+         * {
+         *     if (cli->onError)
+         *     {
+         *          cli->onError(cli);
+         *     }
+         *     int ret = cli->close(cli);
+         * }
+         * onError 之后, swoole会主动触发onClose, 所以, reconnect 只在onClose中来做就可以了
+         */
         return function(/*SwooleClient $client*/) {
-            // TODO 测试 swoole onError 回调调用后onClose回调是不是也会被调用
-            // 因为要靠onClose回调来 reconnect
-            $this->onIOError("swoole client error");
-            // $this->delegate->onClose($this);
+            $this->onIOError("swoole client onError");
         };
     }
 
     private function onClose()
     {
         return function(/*SwooleClient $client*/) {
+            Timer::clearAfterJob($this->getConnectTimeoutTimerId());
+            $this->isConnected = false;
             try {
-                $this->isConnected = false;
                 $this->delegate->onClose($this);
             } catch (\Exception $ex) {
                 sys_echo("nsq({$this->host}:{$this->port}) onClose exception: {$ex->getMessage()}");

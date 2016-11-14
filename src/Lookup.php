@@ -48,7 +48,7 @@ class Lookup
     private $delegate;
 
     /**
-     * @var string[]  map<string, int> [ "http://nsq-dev.s.qima-inc.com:4161" => nsqd_num, ... ]
+     * @var string[]  map<string, list> [ "http://nsq-dev.s.qima-inc.com:4161" => [], ... ]
      */
     private $lookupdHTTPAddrs = [];
     private $lookupdQueryIndex = 0; // for round-robin
@@ -359,7 +359,7 @@ class Lookup
         } else {
             disposableConn:
             list($host, $port) = explode(":", array_rand($this->nsqdTCPAddrsConnNum));
-            list($conn) = (yield Connection::getDisposable($host, $port));
+            list($conn) = (yield Connection::getDisposable($host, $port, NsqConfig::getDisposableConnLifecycle()));
             if ($this->delegate) {
                 $this->delegate->onConnect($conn);
             }
@@ -392,6 +392,27 @@ class Lookup
     public function getLookupdHTTPAddrs()
     {
         return $this->lookupdHTTPAddrs;
+    }
+
+    public function stats()
+    {
+        $nsqdConn = $this->getNSQDAddrConnNum();
+        $lookupds = $this->getLookupdHTTPAddrs();
+
+        /* @var array $nsqds */
+        foreach ($lookupds as $url => $nsqds) {
+            $ret = [];
+            foreach ($nsqds as $i => $nsqd) {
+                $addr = implode(":", $nsqd);
+                $ret[$addr] = $nsqdConn[$addr];
+            }
+            $lookupds[$url] = $ret;
+        }
+
+        return  [
+            "nsqdConnections_" => count($this->getNSQDConnections()),
+            "lookupNsqConnections" => $lookupds,
+        ];
     }
 
     public function removeConnection(Connection $conn)

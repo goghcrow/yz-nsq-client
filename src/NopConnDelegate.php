@@ -66,11 +66,11 @@ class NopConnDelegate implements ConnDelegate
 
     public function onReceive(Connection $conn, $bytes)
     {
-        sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+//        sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
     }
 
     public function onSend(Connection $conn, $bytes)
     {
-        sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
+//        sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
     }
 }

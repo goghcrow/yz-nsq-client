@@ -11,20 +11,27 @@ use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;
 
 
-class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
+class Producer implements ConnDelegate, NsqdDelegate, Async
 {
-    // TODO
-    // private $callback;
+    // 每个topic共享一个Producer实例
+    // 单独保存parallel条件下每个async callback
+    private $callbacks = [];
 
     private $topic;
 
     private $lookup;
+
+    private $stats;
 
     public function __construct($topic, $maxConnectionNum = 1)
     {
         $this->topic = Command::checkTopicChannelName($topic);
         $this->lookup = new Lookup($this->topic, $maxConnectionNum);
         $this->lookup->setNsqdDelegate($this);
+
+        $this->stats = [
+            "messagesPublished" => 0,
+        ];
     }
 
     public function connectToNSQLookupds(array $addresses)
@@ -82,8 +89,17 @@ class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
     }
 
     /**
+     * 统计信息
+     * @return array
+     */
+    public function stats()
+    {
+        return $this->stats + $this->lookup->stats();
+    }
+
+    /**
      * Publish a message to a topic
-     * @param string $body
+     * @param string $message
      * @throws NsqException
      * @return \Generator
      *
@@ -95,19 +111,19 @@ class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function publish($body)
+    public function publish($message)
     {
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
-        // 这里收到的第一个response是identity的, 所以错了
-        $conn->writeCmd(Command::publish($this->topic, $body));
+        $conn->writeCmd(Command::publish($this->topic, $message));
 
-        // TODO
-//        Timer::after(NsqConfig::getPublishTimeout(), function() {
-//            call_user_func($this->callback, null, new NsqException("publish timeout"));
-//        }, $this->getPublishTimeoutTimerId($conn));
-//
-//        yield $this;
+        $this->stats["messagesPublished"]++;
+
+        Timer::after(NsqConfig::getPublishTimeout(),
+            $this->onPublishTimeout((yield getTaskId())),
+            $this->getPublishTimeoutTimerId($conn));
+
+        yield $this;
     }
 
     /**
@@ -132,12 +148,13 @@ class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
         list($conn) = (yield $this->take());
         $conn->writeCmd(Command::multiPublish($this->topic, $messages));
 
-        // TODO
-//        Timer::after(NsqConfig::getPublishTimeout(), function() {
-//            call_user_func($this->callback, null, new NsqException("publish timeout"));
-//        }, $this->getPublishTimeoutTimerId($conn));
-//
-//        yield $this;
+        $this->stats["messagesPublished"] += count($messages);
+
+        Timer::after(NsqConfig::getPublishTimeout(),
+            $this->onPublishTimeout((yield getTaskId())),
+            $this->getPublishTimeoutTimerId($conn));
+
+        yield $this;
     }
 
 
@@ -229,13 +246,27 @@ class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
     {
         Timer::clearAfterJob($this->getPublishTimeoutTimerId($conn));
         $this->release($conn);
-        // TODO
-        // call_user_func($this->callback, $retval, $ex);
+        if ($this->callbacks) {
+            foreach ($this->callbacks as $i => $callback) {
+                unset($this->callbacks[$i]);
+                call_user_func($callback, $retval, $ex);
+            }
+        }
+    }
+
+    private function onPublishTimeout($tid)
+    {
+        return function() use($tid) {
+            if (isset($this->callbacks[$tid])) {
+                call_user_func($this->callbacks[$tid], null, new NsqException("publish timeout"));
+                unset($this->callbacks[$tid]);
+            }
+        };
     }
 
     public function onReceive(Connection $conn, $bytes) {
         if (Debug::get()) {
-//            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
         }
     }
 
@@ -245,11 +276,11 @@ class Producer implements ConnDelegate, NsqdDelegate/*, Async*/
         }
     }
 
-    // TODO
-//    public function execute(callable $callback, $task)
-//    {
-//        $this->callback = $callback;
-//    }
+    public function execute(callable $callback, $task)
+    {
+        /* @var Task $task */
+        $this->callbacks[$task->getTaskId()] = $callback;
+    }
 
     private function getPublishTimeoutTimerId(Connection $conn)
     {

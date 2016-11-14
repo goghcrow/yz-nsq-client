@@ -30,8 +30,8 @@ class NsqConfig
     private static $maxConnectionPerTopic;
     private static $lookup;
     private static $topic;
-    //    private static $maxConnectionPerNsqd;
     private static $publishTimeout;
+    private static $disposableConnLifecycle;
 
     // TODO 压平client参数调整参数
     // 干掉静态变量
@@ -82,7 +82,7 @@ class NsqConfig
         static::$topic                      = Arr::get($config, "topic",                       []);
         static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    1);
         static::$publishTimeout             = Arr::get($config, "publish_timeout",             3 * 1000);
-        // static::$maxConnectionPerNsqd       = Arr::get($config, "max_connection_per_nsqd",     1);
+        static::$disposableConnLifecycle    = Arr::get($config, "disposable_connection_lifecycle", 3 * 1000);
     }
 
     public static function getDelayingCloseTime()
@@ -170,11 +170,6 @@ class NsqConfig
         return static::$enableBackoff;
     }
 
-//    public static function getMaxConnectionPerNsqd()
-//    {
-//        return static::$maxConnectionPerNsqd;
-//    }
-
     public static function getMaxConnectionPerTopic()
     {
         return static::$maxConnectionPerTopic;
@@ -193,6 +188,11 @@ class NsqConfig
     public static function getPublishTimeout()
     {
         return static::$publishTimeout;
+    }
+
+    public static function getDisposableConnLifecycle()
+    {
+        return static::$disposableConnLifecycle;
     }
 
     public static function getMaxRDYCount()

@@ -134,22 +134,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
      */
     public function stats()
     {
-        $nsqdConn = $this->lookup->getNSQDAddrConnNum();
-        $lookupds = $this->lookup->getLookupdHTTPAddrs();
-
-        foreach ($lookupds as $url => $nsqds) {
-            $ret = [];
-            foreach ($nsqds as $i => $nsqd) {
-                $addr = implode(":", $nsqd);
-                $ret[$addr] = $nsqdConn[$addr];
-            }
-            $lookupds[$url] = $ret;
-        }
-
-        return $this->stats + [
-            // "nsqdConnections_" => count($this->getNsqdConns()),
-            "lookupNsqConnections" => $lookupds,
-        ];
+        return $this->stats + $this->lookup->stats() + ["isStarved" => $this->isStarved()];
     }
 
     /**
@@ -211,7 +196,6 @@ class Consumer implements ConnDelegate, NsqdDelegate
                 break;
 
             case static::BackoffSignal:
-                // TODO backoff时间可能需要修改
                 $nextBackoff = $this->getNextBackoff($this->backoffCounter + 1);
                 if ($nextBackoff <= NsqConfig::getMaxBackoffDuration()) {
                     $this->backoffCounter++;
@@ -419,7 +403,6 @@ class Consumer implements ConnDelegate, NsqdDelegate
     private function updateRDY(Connection $conn, $count)
     {
         if ($conn->isClosing()) {
-            // count($this->getNsqdConns())
             /** @noinspection PhpInconsistentReturnPointsInspection */
             return;
         }
@@ -431,7 +414,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
             Timer::clearAfterJob($timerId);
         }
 
-        // 永远不超过customer的max-in-flight限制, 超过则truncate掉, 新连接可以获取部分max-in-flight
+        // 永远不超过customer的max-in-flight限制, 超过则truncate掉, 让新连接可以获取部分max-in-flight
         $remainRdy = $conn->getRemainRDY();
         // 当前连接允许设置的最大RDY值 = 连接原有RDY + (允许最大值 - 当前customer总RDY) = 连接原有RDY + 余量
         $maxPossibleRdy = $remainRdy + ($this->maxInFlight - $this->totalRdyCount);
@@ -439,22 +422,19 @@ class Consumer implements ConnDelegate, NsqdDelegate
             $count = $maxPossibleRdy;
         }
 
-        // todo ? < 0
-        if ($maxPossibleRdy <= 0 && $count > 0) {
-            if ($remainRdy === 0) {
-                // 我们想要离开zeroRDY状态,但是不能
-                // 为了避免永远饥饿的状态, 5s后重新调度
-                // 任意的RDY状态更新成功, 定时器会被取消
-                Timer::after(5000, function() use($conn, $count) {
-                    try {
-                        $this->updateRDY($conn, $count);
-                    } catch (\Exception $ex) {
-                        sys_echo("update rdy exception: {$ex->getMessage()}");
-                    }
-                }, $timerId);
+        // 积压产生, 且服务器要发送的rdy全部发送完毕, 且要离开zeroRDY(count>0)状态
+        if ($maxPossibleRdy <= 0 &&  $remainRdy === 0 && $count > 0) {
+            // 避免永远饥饿的状态, 5s后重新调度
+            // 任意的RDY状态更新成功, 定时器会被取消
+            Timer::after(5000, function() use($conn, $count) {
+                try {
+                    $this->updateRDY($conn, $count);
+                } catch (\Exception $ex) {
+                    sys_echo("update rdy exception: {$ex->getMessage()}");
+                }
+            }, $timerId);
 
-                $this->rdyRetryTimers[$timerId] = true;
-            }
+            $this->rdyRetryTimers[$timerId] = true;
         }
 
         return $this->sendRDY($conn, $count);
@@ -477,22 +457,12 @@ class Consumer implements ConnDelegate, NsqdDelegate
     {
         $this->lookup->stop();
         Timer::clearTickJob($this->rdyLoopTickId());
-
         if (count($this->getNsqdConns()) === 0) {
             return;
         }
 
-        foreach ($this->getNsqdConns() as $conn) {
-            try {
-                $conn->writeCmd(Command::startClose());
-            } catch (\Exception $ex) {
-                sys_echo(__METHOD__ . " ex: " . $ex->getMessage());
-            }
-        }
-
         Timer::after(NsqConfig::getDelayingCloseTime(), function() {
             foreach ($this->getNsqdConns() as $nsqdConn) {
-                // 这里会重复发CLS ~
                 $nsqdConn->tryClose();
             }
         });
@@ -672,7 +642,9 @@ class Consumer implements ConnDelegate, NsqdDelegate
     {
         try {
             $conn->tryClose();
-        } catch (\Exception $ignore) {}
+        } catch (\Exception $ex) {
+            sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$ex->getMessage()}");
+        }
     }
 
     /**
@@ -700,9 +672,9 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $remainConnNum = count($this->getNsqdConns());
         sys_echo("nsq consumer onClose: there are $remainConnNum connections left alive");
 
-        // TODO
         // 该连接有未处理的RDY, 触发一个RDY分配保证当前退出连接的RDY转移到新连接
-        if (($hasRDYRetryTimer || $remainRdyCount > 0) && ($remainConnNum === $this->maxInFlight || $this->inBackoff())
+        if (($hasRDYRetryTimer || $remainRdyCount > 0)
+            && ($remainConnNum === $this->maxInFlight || $this->inBackoff())
         ) {
             $this->needRDYRedistributed = true;
         }
@@ -730,7 +702,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
     public function onReceive(Connection $conn, $bytes) {
         if (Debug::get()) {
-//            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
         }
     }
 

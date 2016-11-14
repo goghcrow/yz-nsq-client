@@ -2,7 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
-use Zan\Framework\Components\Nsq\Dns;
+use Zan\Framework\Components\Nsq\NsqConfig;
 use Zan\Framework\Components\Nsq\Producer;
 use Zan\Framework\Components\Nsq\SQS;
 use Zan\Framework\Foundation\Contract\Async;
@@ -13,19 +13,116 @@ use Zan\Framework\Network\Server\Timer\Timer;
 require_once __DIR__ . "/boot.php";
 
 
-//$task = function() {
-//
-//    $tasks = [];
-//    for ($i = 0; $i < 5; $i++) {
-//        $tasks[] = Dns::lookup("www.baidu.com");
-//    }
-//
-//    $ret = (yield parallel($tasks));
-//
-//    echo "xxxx\n";
-//    var_dump($ret);
-//};
-//Task::execute($task());
+$parallelTask = function() {
+    $topic = "zan_mqworker_test";
+//    (new SQS())->bootstrap(null);
+
+    $task = function() {
+        $topic = "zan_mqworker_test";
+        yield SQS::publish($topic, "hello");
+        yield SQS::publish($topic, "hello", "world");
+
+    };
+
+    $tasks = [];
+    for($i = 0; $i < 10; $i++) {
+        $tasks[$i] = $task();
+    }
+
+    yield parallel($tasks);
+    swoole_timer_after(6000, function() {
+        print_r(SQS::stat());
+        \TestUtils::objectsSummary();
+    });
+};
+// Task::execute($parallelTask());
+//swoole_timer_tick(2000, function() use($parallelTask) {
+//    Task::execute($parallelTask());
+//});
+
+
+$parallelTask = function() {
+    $task = function() {
+        try {
+            $lookupQaUrl = "http://sqs-qa.s.qima-inc.com:4161";
+            $topic = "zan_mqworker_test";
+            $maxConnectionNum = 5;
+            $producer = new Producer($topic, $maxConnectionNum);
+            yield $producer->connectToNSQLookupd($lookupQaUrl);
+
+            $ret1 = (yield $producer->publish("hello sqs"));
+            $ret2 = (yield $producer->multiPublish(["hello", "sqs"]));
+            yield [$ret1, $ret2];
+
+        } catch (\Exception $ex) {
+            echo_exception($ex);
+        }
+    };
+
+    $tasks = [];
+    for ($i = 0; $i < 10; $i++) {
+        $tasks[] = $task();
+    }
+    $list = (yield parallel($tasks));
+    print_r($list);
+};
+
+//Task::execute($parallelTask());
+
+
+$parallelTask = function() {
+    $task = function(Producer $producer) {
+        try {
+
+            $ret1 = (yield $producer->publish("hello sqs"));
+            $ret2 = (yield $producer->multiPublish(["hello", "sqs"]));
+            yield [$ret1, $ret2];
+
+        } catch (\Exception $ex) {
+            echo_exception($ex);
+        }
+    };
+
+
+    $lookupQaUrl = "http://sqs-qa.s.qima-inc.com:4161";
+    $topic = "zan_mqworker_test";
+    $maxConnectionNum = 5;
+    $producer = new Producer($topic, $maxConnectionNum);
+    yield $producer->connectToNSQLookupd($lookupQaUrl);
+
+
+    $tasks = [];
+    for ($i = 0; $i < 10; $i++) {
+        $tasks[] = $task($producer);
+    }
+
+    $list = (yield parallel($tasks));
+    print_r($list);
+};
+//Task::execute($parallelTask());
+
+
+$parallelTask = function() {
+    $task = function($i) {
+        try {
+            $topic = "zan_mqworker_test";
+            $ret1 = (yield SQS::publish($topic, "hello sqs"));
+            $ret2 = (yield SQS::publish($topic, "hello sqs", "hello"));
+            yield [$ret1, $ret2];
+        } catch (\Exception $ex) {
+            echo_exception($ex);
+        }
+    };
+
+    $tasks = [];
+    for ($i = 0; $i < 100; $i++) {
+        $tasks[] = $task($i);
+    }
+    $list = (yield parallel($tasks));
+    print_r($list);
+};
+
+Task::execute($parallelTask());
 
 
 
@@ -58,48 +155,3 @@ require_once __DIR__ . "/boot.php";
 //};
 //Task::execute($t());
 
-
-$parallelTask = function() {
-    $topic = "zan_mqworker_test";
-//    (new SQS())->bootstrap(null);
-//    yield SQS::prepareProducers([
-//        $topic => 20,
-//    ]);
-
-    $task = function() {
-        $topic = "zan_mqworker_test";
-        yield SQS::publish($topic, "hello");
-        yield SQS::publish($topic, "hello", "world");
-
-    };
-
-    for($i = 0; $i < 10; $i++) {
-        Task::execute($task());
-    }
-};
-
-Task::execute($parallelTask());
-
-
-//$task = function() {
-//    try {
-//        $lookupQaUrl = "http://sqs-qa.s.qima-inc.com:4161";
-//        $topic = "zan_mqworker_test";
-//        $maxConnectionNum = 5;
-//        $producer = new Producer($topic, $maxConnectionNum);
-//        yield $producer->connectToNSQLookupd($lookupQaUrl);
-//        $ret = (yield $producer->publish("hello sqs"));
-//        echo "xxxxxxxxxxxxxxxxxxxxxx\n";
-//        var_dump($ret);
-//
-//        $ret = (yield $producer->multiPublish(["hello", "sqs"]));
-//        echo "xxxxxxxxxxxxxxxxxxxxxx\n";
-//        var_dump($ret);
-//    } catch (\Exception $ex) {
-//        echo_exception($ex);
-//    }
-//};
-//
-//for($i = 0; $i < 10; $i++) {
-//    Task::execute($task());
-//}

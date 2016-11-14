@@ -1,27 +1,37 @@
 <?php
 
+// 只有lookup项必填, 其他全部选填
+// 时间单位: ms
 return [
+    // ["必填"]lookup 节点地址
     "lookup" => [
         "http://sqs-qa.s.qima-inc.com:4161"
     ],
 
+    // 需要publish的topic列表
     "topic" => [
         "zan_mqworker_test",
     ],
 
-    "publish_timeout" => 3 * 1000, // 废弃 ?!
+    // 发布超时时间
+    "publish_timeout" => 1000000, // 3 * 1000, // 废弃 ?! TODO
 
-    // 以前全部为可选配置
+    // 每个topic的最大nsqd连接数, 最小值为lookup节点查询当前nsqd数量
+    // max(count($nsqdList), $this->maxConnectionNum)
     "max_connection_per_topic" => 1, // TODO
 
-    // "max_connection_per_nsqd" => // ceil(max(count(NSQDs), max_connection_per_topic) / count(NSQDs)), // 到每台nsqd机器的最大连接数
-    "enable_backoff" => false, // TODO
+    // publish临时连接生命周期
+    "disposable_connection_lifecycle" => 100000, // 3 * 1000,
 
     // prod机器 /proc/sys/net/core/rmem_max = /proc/sys/net/core/wmem_max = 327679
     "socket_buffer_size" => 327679,
     "packet_size_limit" => 327679,
+
+    // nsqd连接延迟关闭时间
     "delaying_close_time" => 5000, // ms
-    "nsqd_connect_timeout" => 1000, // ms
+    // 连接nsqd超时时间
+    "nsqd_connect_timeout" => 100000, // 1000, // ms //TODO
+    // lookup连接超时时间
     "nsqlookupd_connect_timeout" => 3000, // ms
 
     "identity" => [
@@ -61,6 +71,9 @@ return [
     "max_requeue_delay" => 60, //s TODO
     "default_requeue_delay" => 90, //s TODO
 
+    // 是否开启backoff, 发生requeue或处理异常触发backoff
+    "enable_backoff" => false, // TODO
+
     "max_backoff_duration" => 10 * 60 * 1000, // 10min
 
     "message_backoff" => [
@@ -71,16 +84,16 @@ return [
         "jitter" => 0.3 // 0~1
     ],
 
-    // secret for nsqd authentication (requires nsqd 0.2.29+)
-    // "auto_secret" => "",
-
     // Duration to wait for a message from a producer when in a state where RDY
     // counts are re-distributed (ie. max_in_flight < num_producers)
     "low_rdy_idle_timeout" => 10 * 1000, // 10s
 
-    // Duration between redistributing max-in-flight to connections
+    // 在nsqd连接间重新分配max-in-flight的时间间隔
     "rdy_redistribute_interval" => 5 * 1000, //5s
 
-    // Maximum number of times this consumer will attempt to process a message before giving up
+    // consumer消息最大重试次数
     "max_attempts" => 5,
+
+    // auth 不支持
+    "auto_secret" => "",
 ];

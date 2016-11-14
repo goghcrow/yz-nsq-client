@@ -4,10 +4,9 @@ namespace Zan\Framework\Components\Nsq;
 
 
 use Zan\Framework\Components\Contract\Nsq\MsgHandler;
-use Zan\Framework\Components\Nsq\Utils\SpinLock;
+use Zan\Framework\Components\Nsq\Utils\Lock;
 use Zan\Framework\Contract\Network\Bootable;
 use Zan\Framework\Foundation\Coroutine\Task;
-use Zan\Framework\Network\Server\Timer\Timer;
 
 class SQS implements Bootable
 {
@@ -107,50 +106,30 @@ class SQS implements Bootable
             }
         }
 
-        yield SpinLock::lock(__CLASS__);
+        yield Lock::lock(__CLASS__);
         try {
             if (!isset(static::$producers[$topic])) {
                 yield static::prepareProducers([$topic => NsqConfig::getMaxConnectionPerTopic()]);
             }
         } finally {
-            SpinLock::unlock(__CLASS__);
+            yield Lock::unlock(__CLASS__);
         }
 
+
         $producer = static::$producers[$topic];
-
-//        if ($producer instanceof Producer) {
-            if (count($messages) === 1) {
-                $resp = (yield $producer->publish($messages[0]));
-            } else {
-                $resp = (yield $producer->multiPublish($messages));
-            }
-        // TODO 立即返回
-//            if ($resp === "OK") {
-//                yield true;
-//            } else {
-//                $msgStr = implode("//", $messages);
-//                sys_echo("publish fail, [topic=>$topic, msg=$msgStr, resp=$resp]");
-//                yield false;
-//            }
-
-//        } else {
-            // 等待连接~
-//            $args = func_get_args();
-//            $method = __METHOD__;
-//            Timer::after(10, function() use($method, $args) {
-//                Task::execute(static::call($method, $args));
-//            });
-//        }
+        if (count($messages) === 1) {
+            $resp = (yield $producer->publish($messages[0]));
+        } else {
+            $resp = (yield $producer->multiPublish($messages));
+        }
+        if ($resp === "OK") {
+            yield true;
+        } else {
+            $msgStr = implode("//", $messages);
+            sys_echo("publish fail, [topic=>$topic, msg=$msgStr, resp=$resp]");
+            yield false;
+        }
     }
-
-//    private static function call($method, array $args)
-//    {
-//        try {
-//            yield call_user_func_array($method, $args);
-//        } catch (\Exception $ex) {
-//            echo_exception($ex);
-//        }
-//    }
 
     /**
      * @param array $conf map<string, int> [topic => connNum]
@@ -163,12 +142,6 @@ class SQS implements Bootable
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
         }
-
-        // 预先填充true占位, 防止 yield中断产生并发
-        // 造成 n个task 并发建立同一个topic的连接
-//        foreach ($conf as $topic => $connNum) {
-//            static::$producers[$topic] = true;
-//        }
 
         foreach ($conf as $topic => $connNum) {
             Command::checkTopicChannelName($topic);
@@ -184,6 +157,21 @@ class SQS implements Bootable
             }
             static::$producers[$topic] = $producer;
         }
+    }
+
+    public static function stat()
+    {
+        $stat = [
+            "consumer" => [],
+            "producer" => [],
+        ];
+        foreach (static::$consumers as $consumer) {
+            $stat["consumer"][] = $consumer->stats();
+        }
+        foreach (static::$producers as $producer) {
+            $stat["producer"][] = $producer->stats();
+        }
+        return $stat;
     }
 
     public function bootstrap($server)

@@ -13,9 +13,17 @@ if (!function_exists("xdebug_break")) {
     function xdebug_break() {}
 }
 
-
 class TestUtils
 {
+    public static function objectsSummary()
+    {
+        if (function_exists("meminfo_objects_summary")) {
+            gc_collect_cycles();
+            $stdout = fopen('php://stdout','w');
+            meminfo_objects_summary($stdout);
+        }
+    }
+
     /**
      * https://en.wikipedia.org/wiki/Units_of_information
      * @param int $bytes

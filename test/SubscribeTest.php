@@ -57,12 +57,12 @@ $task = function()
     // TODO write "FIN xxx fail, because connection is closing
 
     // core
-//    Timer::after(5000, function() use($consumer) {
-//        $consumer->stop();
-//        Timer::after(5000, function() use($consumer) {
-//            print_r($consumer->stats());
-//        });
-//    });
+    Timer::after(5000, function() use($consumer) {
+        $consumer->stop();
+        Timer::after(5000, function() use($consumer) {
+            print_r($consumer->stats());
+        });
+    });
 
 //    Timer::after(5000, function() use($consumer, $topic, $ch) {
 //        SQS::unSubscribe($topic, $ch);
