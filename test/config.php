@@ -15,6 +15,9 @@ return [
 
     "message_auto_response" => true,
 
+    // Maximum number of messages to allow in flight (concurrency knob)
+    "max_in_flight" => 2500, //2500, // pipe_count TODO
+
     // 发布超时时间
     "publish_timeout" => 3000, // 3 * 1000, TODO
 
@@ -66,12 +69,9 @@ return [
     "lookupd_poll_interval" => 30 * 1000,// 60 * 1000, //60s TODO 通过lookupd更新nsqd节点周期
     "lookupd_poll_jitter" => 0.3,
 
-    // Maximum number of messages to allow in flight (concurrency knob)
-    "max_in_flight" => 10, //2500, // pipe_count
-
     // Maximum duration when REQueueing (for doubling of deferred requeue)
-    "max_requeue_delay" => 60, //s TODO
-    "default_requeue_delay" => 90, //s TODO
+    // "max_requeue_delay" => 60, //s TODO
+    // "default_requeue_delay" => 90, //s TODO
 
     // 是否开启backoff, 发生requeue或处理异常触发backoff
     "enable_backoff" => false, // TODO

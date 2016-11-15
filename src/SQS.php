@@ -88,7 +88,7 @@ class SQS
 
         foreach ($messages as $i => $message) {
             if (is_scalar($message)) {
-                $messages[$i] = strval($message);
+                $messages[$i] = /*strval(*/$message/*)*/;
             } else {
                 $messages[$i] = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             }

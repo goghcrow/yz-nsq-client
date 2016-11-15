@@ -18,7 +18,6 @@ class NsqConfig
     private static $packetSizeLimit;
     private static $socketBufferSize;
     private static $delayingCloseTime;
-    private static $maxRequeueDelay;
     private static $messageBackoff;
     private static $maxBackoffDuration;
     private static $lookupdPollInterval;
@@ -74,7 +73,6 @@ class NsqConfig
         static::$lookupdPollInterval        = Arr::get($config, "lookupd_poll_interval",       60 * 1000);
         static::$lookupdPollJitter          = Arr::get($config, "lookupd_poll_jitter",         0.3);
         static::$maxInFlightCount           = Arr::get($config, "max_in_flight",               2500);
-        static::$maxRequeueDelay            = Arr::get($config, "max_requeue_delay",           60 * 1000 * 1000);
         static::$delayingCloseTime          = Arr::get($config, "delaying_close_time",         5 * 1000);
         static::$rdyRedistributeInterval    = Arr::get($config, "rdy_redistribute_interval",   5 * 1000);
         static::$lowRdyIdleTimeout          = Arr::get($config, "low_rdy_idle_timeout",        10 * 1000);
@@ -125,11 +123,6 @@ class NsqConfig
     public static function getSocketBufferSize()
     {
         return static::$socketBufferSize;
-    }
-
-    public static function getMaxRequeueDelay()
-    {
-        return static::$maxRequeueDelay;
     }
 
     public static function getMessageBackoff()
