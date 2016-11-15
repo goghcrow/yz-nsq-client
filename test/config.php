@@ -14,14 +14,14 @@ return [
     ],
 
     // 发布超时时间
-    "publish_timeout" => 1000000, // 3 * 1000, // 废弃 ?! TODO
+    "publish_timeout" => 3000, // 3 * 1000, TODO
 
     // 每个topic的最大nsqd连接数, 最小值为lookup节点查询当前nsqd数量
     // max(count($nsqdList), $this->maxConnectionNum)
-    "max_connection_per_topic" => 1, // TODO 50
+    "max_connection_per_topic" => 20, // TODO 50
 
     // publish临时连接生命周期, 要大于消息处理时长
-    "disposable_connection_lifecycle" => 3000, // 3 * 1000,
+    "disposable_connection_lifecycle" => 10 * 1000, // 3 * 1000,
 
     // prod机器 /proc/sys/net/core/rmem_max = /proc/sys/net/core/wmem_max = 327679
     "socket_buffer_size" => 327679,
@@ -30,7 +30,7 @@ return [
     // nsqd连接延迟关闭时间
     "delaying_close_time" => 5000, // ms
     // 连接nsqd超时时间
-    "nsqd_connect_timeout" => 100000, // 1000, // ms //TODO
+    "nsqd_connect_timeout" => 30000, // 1000, // ms //TODO
     // lookup连接超时时间
     "nsqlookupd_connect_timeout" => 3000, // ms
 
@@ -61,7 +61,7 @@ return [
     // Duration between polling lookupd for new producers, and fractional jitter to add to
     // the lookupd pool loop. this helps evenly distribute requests even if multiple consumers
     // restart at the same time
-    "lookupd_poll_interval" => 20*1000,// 60 * 1000, //60s TODO 通过lookupd更新nsqd节点周期
+    "lookupd_poll_interval" => 30 * 1000,// 60 * 1000, //60s TODO 通过lookupd更新nsqd节点周期
     "lookupd_poll_jitter" => 0.3,
 
     // Maximum number of messages to allow in flight (concurrency knob)
