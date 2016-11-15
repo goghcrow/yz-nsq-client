@@ -3,6 +3,7 @@
 namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
+use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Utilities\DesignPattern\Singleton;
 
 class NopConnDelegate implements ConnDelegate
@@ -66,11 +67,15 @@ class NopConnDelegate implements ConnDelegate
 
     public function onReceive(Connection $conn, $bytes)
     {
-//        sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+        if (Debug::get()) {
+            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+        }
     }
 
     public function onSend(Connection $conn, $bytes)
     {
-//        sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
+        if (Debug::get()) {
+            sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
+        }
     }
 }
