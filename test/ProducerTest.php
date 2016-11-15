@@ -107,7 +107,7 @@ $parallelTask = function() {
         try {
             $topic = "zan_mqworker_test";
             $ret1 = (yield SQS::publish($topic, "hello sqs"));
-            yield taskSleep(60000);
+            // yield taskSleep(2000);
             $ret2 = (yield SQS::publish($topic, "hello sqs", "hello"));
             yield [$ret1, $ret2];
         } catch (\Exception $ex) {
@@ -116,11 +116,14 @@ $parallelTask = function() {
     };
 
     $tasks = [];
-    for ($i = 0; $i < 10; $i++) {
+    for ($i = 0; $i < 4; $i++) {
         $tasks[] = $task($i);
     }
     $list = (yield parallel($tasks));
+
+    xdebug_break();
     print_r($list);
+
     \TestUtils::objectsSummary();
     Timer::after(6000, function() {
        \TestUtils::objectsSummary();

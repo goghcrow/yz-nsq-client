@@ -115,14 +115,17 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     {
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
-        $conn->writeCmd(Command::publish($this->topic, $message));
 
+        $conn->writeCmd(Command::publish($this->topic, $message));
         $this->stats["messagesPublished"]++;
 
-        Timer::after(NsqConfig::getPublishTimeout(),
-            $this->onPublishTimeout((yield getTaskId())),
-            $this->getPublishTimeoutTimerId($conn));
+        $timeout = NsqConfig::getPublishTimeout();
+        $onTimeout = $this->onPublishTimeout(spl_object_hash($conn));
+        $timerId = $this->getPublishTimeoutTimerId($conn);
 
+        Timer::after($timeout, $onTimeout, $timerId);
+
+        yield setContext("conn", $conn);
         yield $this;
     }
 
@@ -150,13 +153,15 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
 
         $this->stats["messagesPublished"] += count($messages);
 
-        Timer::after(NsqConfig::getPublishTimeout(),
-            $this->onPublishTimeout((yield getTaskId())),
-            $this->getPublishTimeoutTimerId($conn));
+        $timeout = NsqConfig::getPublishTimeout();
+        $onTimeout = $this->onPublishTimeout(spl_object_hash($conn));
+        $timerId = $this->getPublishTimeoutTimerId($conn);
 
+        Timer::after($timeout, $onTimeout, $timerId);
+
+        yield setContext("conn", $conn);
         yield $this;
     }
-
 
     /**
      * onConnected is called when nsqd connects
@@ -245,23 +250,49 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     private function onPublishResponse(Connection $conn, $retval, \Exception $ex = null)
     {
         Timer::clearAfterJob($this->getPublishTimeoutTimerId($conn));
+
         $this->release($conn);
-        if ($this->callbacks) {
-            foreach ($this->callbacks as $i => $callback) {
-                unset($this->callbacks[$i]);
-                call_user_func($callback, $retval, $ex);
-            }
+
+        $hash = spl_object_hash($conn);
+        if (isset($this->callbacks[$hash])) {
+            $callback = $this->callbacks[$hash];
+            // NOTICE!!!
+            // 这里必须首先unset掉, 因为 call_user_func唤醒task, 内部可能仍然有publish异步操作
+            // 则可能会执行到execute中, 新的callback将会覆盖旧的callback
+            unset($this->callbacks[$hash]);
+            call_user_func($callback, $retval, $ex);
         }
     }
 
-    private function onPublishTimeout($tid)
+    private function onPublishTimeout($connHash)
     {
-        return function() use($tid) {
-            if (isset($this->callbacks[$tid])) {
-                call_user_func($this->callbacks[$tid], "TIME_OUT", new NsqException("publish timeout"));
-                unset($this->callbacks[$tid]);
+        return function() use($connHash) {
+            if (isset($this->callbacks[$connHash])) {
+                $callback = $this->callbacks[$connHash];
+                call_user_func($callback, "TIME_OUT", new NsqException("publish timeout"));
+                unset($this->callbacks[$connHash]);
             }
         };
+    }
+
+    /**
+     * @param callable $callback
+     * @param Task $task
+     */
+    public function execute(callable $callback, $task)
+    {
+        $conn = $task->getContext()->get("conn");
+        $connHash = spl_object_hash($conn);
+        if (isset($this->callbacks[$connHash])) {
+            assert(false); // for debug
+        } else {
+            $this->callbacks[$connHash] = $callback;
+        }
+    }
+
+    private function getPublishTimeoutTimerId(Connection $conn)
+    {
+        return sprintf("%s_%s_public_time_out", spl_object_hash($this), spl_object_hash($conn));
     }
 
     public function onReceive(Connection $conn, $bytes) {
@@ -274,17 +305,6 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         if (Debug::get()) {
             sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
         }
-    }
-
-    public function execute(callable $callback, $task)
-    {
-        /* @var Task $task */
-        $this->callbacks[$task->getTaskId()] = $callback;
-    }
-
-    private function getPublishTimeoutTimerId(Connection $conn)
-    {
-        return sprintf("%s_%s_public_time_out", spl_object_hash($this), spl_object_hash($conn));
     }
 
     public function onHeartbeat(Connection $conn) {}

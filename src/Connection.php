@@ -41,8 +41,6 @@ class Connection implements Async
 
     private $isWaitingClose = false;
 
-    // private $isWaitingResp = false;
-
     /**
      * 当前处理中消息数量
      * @var int
@@ -387,18 +385,18 @@ class Connection implements Async
         try {
             $this->delegate->onReceive($this, $bytes);
             $frame = new Frame($bytes);
-            // HEARTBEAT
-            if ($frame->getType() === Frame::FrameTypeResponse) {
-                if ($frame->getBody() === Frame::HEARTBEAT) {
-                    $this->delegate->onHeartbeat($this);
-                    $this->writeCmd(Command::nop());
-                    return;
-                }
+
+            $isHeartbeat = $frame->getType() === Frame::FrameTypeResponse
+                && $frame->getBody() === Frame::HEARTBEAT;
+
+            if ($isHeartbeat) {
+                $this->delegate->onHeartbeat($this);
+                $this->writeCmd(Command::nop());
+                return;
             }
 
             Task::execute($this->dispatchFrame($frame));
         } catch (\Exception $ex) {
-            // $this->sendSyncCmdResp(null, $ex);
             sys_echo("nsq({$this->host}:{$this->port}) recv or handle fail, {$ex->getMessage()}");
             echo_exception($ex);
             $this->onIOError($ex->getMessage());
@@ -411,7 +409,7 @@ class Connection implements Async
             yield $this->doDispatchFrame($frame);
         } catch (\Exception $ex) {
             sys_echo("nsq({$this->host}:{$this->port}) dispatchFrame exception: {$ex->getMessage()}");
-            // $this->sendSyncCmdResp(null, $ex);
+            echo_exception($ex);
         }
     }
 
@@ -419,14 +417,12 @@ class Connection implements Async
     {
         switch ($frame->getType()) {
             case Frame::FrameTypeResponse:
-                // $this->sendSyncCmdResp($frame->getBody());
                 yield $this->delegate->onResponse($this, $frame->getBody());
                 break;
 
             case Frame::FrameTypeMessage:
                 try {
                     $msg = new Message($frame->getBody(), new ConnMsgDelegate($this));
-                    // $this->sendSyncCmdResp($msg);
                     yield $this->delegate->onMessage($this, $msg);
                 } finally {
                     $this->rdyCount--;
@@ -436,14 +432,12 @@ class Connection implements Async
                 break;
 
             case Frame::FrameTypeError:
-                // $this->sendSyncCmdResp($frame->getBody());
                 yield $this->delegate->onError($this, $frame->getBody());
                 break;
 
             default:
                 $msg = "nsq({$this->host}:{$this->port}) receive unknown frame type {$frame->getType()}";
                 sys_echo($msg);
-                // $this->sendSyncCmdResp($frame, new NsqException($msg));
         }
     }
 
@@ -578,11 +572,4 @@ class Connection implements Async
     {
         return sprintf("%s_%s_connect_timeout", spl_object_hash($this), __CLASS__);
     }
-
-    /*
-    private function getWriteCmdTimeoutTimerId()
-    {
-        return sprintf("%s_%s_write_cmd_timeout", spl_object_hash($this), __CLASS__);
-    }
-    */
 }
