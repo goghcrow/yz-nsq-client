@@ -22,8 +22,9 @@ interface MsgHandler
      * @param Consumer $consumer
      * @return bool When the return value is == true Consumer will automatically handle FINishing.
      *
-     * When the return value is == true Consumer will automatically handle FINishing.
-     * When the returned value is == false Consumer will automatically handle REQueing.
+     * When the return value !== false Consumer will automatically handle FINishing.
+     * When the returned value is ==- false Consumer will automatically handle REQueing.
+     * When exception caught Consumer will automatically handle REQueing.
      */
     public function handleMessage(Message $message, Consumer $consumer);
 
