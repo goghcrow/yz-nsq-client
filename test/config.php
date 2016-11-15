@@ -13,6 +13,8 @@ return [
         "zan_mqworker_test",
     ],
 
+    "message_auto_response" => true,
+
     // 发布超时时间
     "publish_timeout" => 3000, // 3 * 1000, TODO
 

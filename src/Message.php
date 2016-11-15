@@ -45,6 +45,7 @@ class Message
     {
         $this->unpack($bytes);
         $this->delegate = $delegate;
+        $this->autoResponse = NsqConfig::getMessageAutoResponse();
     }
 
     /**

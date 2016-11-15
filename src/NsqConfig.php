@@ -32,6 +32,7 @@ class NsqConfig
     private static $topic;
     private static $publishTimeout;
     private static $disposableConnLifecycle;
+    private static $messageAutoResponse;
 
     // TODO 压平client参数调整参数
     // 干掉静态变量
@@ -64,6 +65,7 @@ class NsqConfig
 
         static::$identify                   = Arr::get($config, "identity", [])                + $idInfoDefault;
         static::$messageBackoff             = Arr::get($config, "message_backoff", [])         + $backoffDefault;
+        static::$messageAutoResponse        = Arr::get($config, "message_auto_response",       true);
         static::$maxBackoffDuration         = Arr::get($config, "max_backoff_duration",        60 * 1000);
         static::$nsqlookupdConnectTimeout   = Arr::get($config, "nsqlookupd_connect_timeout",  3 * 1000);
         static::$nsqdConnectTimeout         = Arr::get($config, "nsqd_connect_timeout",        3 * 1000);
@@ -193,6 +195,11 @@ class NsqConfig
     public static function getDisposableConnLifecycle()
     {
         return static::$disposableConnLifecycle;
+    }
+
+    public static function getMessageAutoResponse()
+    {
+        return static::$messageAutoResponse;
     }
 
     public static function getMaxRDYCount()
