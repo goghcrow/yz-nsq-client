@@ -76,7 +76,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
 
     private function release(Connection $conn)
     {
-        $this->lookup->release($conn);
+        return $this->lookup->release($conn);
     }
 
     /**
@@ -195,7 +195,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      */
     public function onError(Connection $conn, $bytes)
     {
-        $this->onPublishResponse($conn, null, new NsqException($bytes));
+        $this->onPublishResponse($conn, "CONN_ERROR", new NsqException($bytes));
     }
 
     /**
@@ -207,7 +207,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      */
     public function onIOError(Connection $conn, \Exception $ex)
     {
-        $this->onPublishResponse($conn, null, $ex);
+        $this->onPublishResponse($conn, "IO_ERROR", $ex);
 
         try {
             $this->lookup->removeConnection($conn);
@@ -226,7 +226,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      */
     public function onClose(Connection $conn)
     {
-        $this->onPublishResponse($conn, null, null);
+        $this->onPublishResponse($conn, "CONN_CLOSED", new NsqException("connection close, maybe disposable connection timeout"));
 
         if (!$conn->isDisposable()) {
             $this->lookup->removeConnection($conn);
@@ -258,7 +258,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     {
         return function() use($tid) {
             if (isset($this->callbacks[$tid])) {
-                call_user_func($this->callbacks[$tid], null, new NsqException("publish timeout"));
+                call_user_func($this->callbacks[$tid], "TIME_OUT", new NsqException("publish timeout"));
                 unset($this->callbacks[$tid]);
             }
         };

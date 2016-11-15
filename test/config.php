@@ -18,10 +18,10 @@ return [
 
     // 每个topic的最大nsqd连接数, 最小值为lookup节点查询当前nsqd数量
     // max(count($nsqdList), $this->maxConnectionNum)
-    "max_connection_per_topic" => 1, // TODO
+    "max_connection_per_topic" => 1, // TODO 50
 
-    // publish临时连接生命周期
-    "disposable_connection_lifecycle" => 100000, // 3 * 1000,
+    // publish临时连接生命周期, 要大于消息处理时长
+    "disposable_connection_lifecycle" => 3000, // 3 * 1000,
 
     // prod机器 /proc/sys/net/core/rmem_max = /proc/sys/net/core/wmem_max = 327679
     "socket_buffer_size" => 327679,

@@ -60,19 +60,10 @@ final class Lock implements Async
         $this->locked = false;
         $callbacks = static::$callbacks[$this->lockName];
 
-//        $exceptions = [];
         foreach ($callbacks as $taskId => $callback) {
-//            try {
-                call_user_func($callback, null, null);
-//            } catch (\Exception $ex) {
-//                $exceptions[$taskId] = $ex;
-//            }
+            call_user_func($callback, null, null); // TODO catch ex
         }
         unset(static::$callbacks[$this->lockName]);
-
-//        if ($exceptions) {
-//            throw new \RuntimeException(print_r($exceptions, true));
-//        }
     }
 
     /**

@@ -479,7 +479,7 @@ class Connection implements Async
         };
     }
 
-    private function write($payload)
+    private function write($payload, $ignoreError = false)
     {
         if ($this->isClosing()) {
             sys_echo("nsq({$this->host}:{$this->port}) write \"$payload\" fail, because connection is closing");
@@ -487,7 +487,9 @@ class Connection implements Async
         }
 
         $this->delegate->onSend($this, $payload);
-        if (!$this->client->send($payload)) {
+        $ok = $this->client->send($payload);
+        // 防止异常情况send always fail, 发送CLS命令导致递归
+        if (!$ok && !$ignoreError) {
             $this->onIOError("swoole client send fail");
         }
     }
@@ -532,7 +534,7 @@ class Connection implements Async
 
     private function prepareClose()
     {
-        $this->writeCmd(Command::startClose());
+        $this->write(Command::startClose(), true);
         $this->client->sleep();
         $this->isWaitingClose = true;
     }

@@ -4,6 +4,7 @@ namespace Zan\Framework\Components\Nsq\Test;
 
 use Zan\Framework\Components\Nsq\Utils\Dns;
 use Zan\Framework\Foundation\Coroutine\Task;
+use Zan\Framework\Foundation\Exception\ParallelException;
 use Zan\Framework\Network\Common\HttpClient;
 
 require_once __DIR__ . "/boot.php";
@@ -24,18 +25,24 @@ $parallelTask = function() use($task) {
         for ($i = 0; $i < 10; $i++) {
             $tasks["job_$i"] = $task($i);
         }
-        $list = (yield parallel($tasks));
         // fix zan parallel bug
-        echo count($list), "\n";
+        $list = (yield parallel($tasks));
+        xdebug_break();
+        echo "done\n";
+    } catch (ParallelException $ex) {
+        echo $ex;
+        $list = $ex->getParallelResult();
+        xdebug_break();
+
         foreach ($list as $item) {
             if ($item instanceof \Exception) {
                 // echo_exception($item);
                 echo $item->getMessage(), "\n";
             }
         }
-        echo "done\n";
-    } catch (\Exception $ex) {
-        echo_exception($ex);
+
+        $exs = $ex->getExceptions();
+        xdebug_break();
     }
 };
 

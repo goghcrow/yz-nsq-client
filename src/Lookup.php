@@ -370,10 +370,12 @@ class Lookup
     public function release(Connection $conn)
     {
         $key = spl_object_hash($conn);
-        if ($conn->tryRelease())  {
+        if ($conn->tryRelease() && !$conn->isDisposable())  {
             unset($this->busyConnections[$key]);
             $this->idleConnections[$key] = $conn;
+            return true;
         }
+        return false;
     }
 
     /**
