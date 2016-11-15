@@ -6,6 +6,7 @@ namespace Zan\Framework\Components\Nsq;
 use Zan\Framework\Components\Contract\Nsq\MsgHandler;
 use Zan\Framework\Components\Nsq\Utils\Lock;
 use Zan\Framework\Contract\Network\Bootable;
+use Zan\Framework\Foundation\Core\Config;
 use Zan\Framework\Foundation\Coroutine\Task;
 
 class SQS implements Bootable
@@ -176,6 +177,8 @@ class SQS implements Bootable
 
     public function bootstrap($server)
     {
+        NsqConfig::init(Config::get("nsq", []));
+
         $task = function() {
             try {
                 $topics = NsqConfig::getTopic();
@@ -191,6 +194,7 @@ class SQS implements Bootable
                 echo_exception($ex);
             }
         };
+        
         Task::execute($task());
     }
 }
