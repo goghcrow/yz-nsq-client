@@ -16,7 +16,7 @@ return [
     "message_auto_response" => true,
 
     // Maximum number of messages to allow in flight (concurrency knob)
-    "max_in_flight" => 2500, //2500, // pipe_count TODO
+    "max_in_flight" => 100, //2500, // pipe_count TODO
 
     // 发布超时时间
     "publish_timeout" => 3000, // 3 * 1000, TODO
