@@ -126,11 +126,14 @@ class SQS
             "consumer" => [],
             "producer" => [],
         ];
-        foreach (InitializeSQS::$consumers as $consumer) {
-            $stat["consumer"][] = $consumer->stats();
+        foreach (InitializeSQS::$consumers as $topicCh => $consumers) {
+            /* @var Consumer $consumer */
+            foreach ($consumers as $consumer) {
+                $stat["consumer"][$topicCh] = $consumer->stats();
+            }
         }
-        foreach (InitializeSQS::$producers as $producer) {
-            $stat["producer"][] = $producer->stats();
+        foreach (InitializeSQS::$producers as $topic => $producer) {
+            $stat["producer"][$topic] = $producer->stats();
         }
         return $stat;
     }

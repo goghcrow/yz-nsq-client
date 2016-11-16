@@ -31,5 +31,6 @@ $task = function()
     $consumer = (yield SQS::subscribe($topic, $ch, new BenchMsgHandler(), 1));
 };
 
+swoole_timer_tick(1000, function() { print_r(SQS::stat()); });
 
 Task::execute($task());

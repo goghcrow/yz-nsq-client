@@ -31,4 +31,6 @@ $taskPub = function () {
     yield parallel($tasks);
 };
 
+swoole_timer_tick(1000, function() { print_r(SQS::stat()); });
+
 Task::execute($taskPub());
