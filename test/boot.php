@@ -13,8 +13,30 @@ if (!function_exists("xdebug_break")) {
     function xdebug_break() {}
 }
 
+
 class TestUtils
 {
+    public static function xhprof()
+    {
+        if (function_exists("xhprof_enable")) {
+            xhprof_enable(XHPROF_FLAGS_NO_BUILTINS | XHPROF_FLAGS_CPU | XHPROF_FLAGS_MEMORY);
+            register_shutdown_function(function() {
+                print_r(xhprof_disable());
+            });
+        }
+    }
+
+    public static function memoryProf($id)
+    {
+        if (function_exists('memprof_enable')) {
+            memprof_enable();
+            register_shutdown_function(function() use($id) {
+                /** @noinspection PhpUndefinedFunctionInspection */
+                memprof_dump_callgrind(fopen("/tmp/{$id}.out", "w"));
+            });
+        }
+    }
+
     public static function objectsSummary()
     {
         if (function_exists("meminfo_objects_summary")) {

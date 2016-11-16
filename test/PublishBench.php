@@ -8,6 +8,7 @@ use Zan\Framework\Foundation\Coroutine\Task;
 
 require_once __DIR__ . "/boot.php";
 
+
 $taskPub = function () {
     $payload = str_repeat("a", 1024 * 2);
 
