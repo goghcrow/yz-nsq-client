@@ -85,6 +85,13 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->bootRedistributeRDYTick();
     }
 
+    public function __destruct()
+    {
+        foreach (get_class_vars(__CLASS__) as $prop => $_) {
+            unset($this->$prop);
+        }
+    }
+
     /**
      * @param $address
      * @return \Generator Consumer

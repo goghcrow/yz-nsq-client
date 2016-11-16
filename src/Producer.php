@@ -34,6 +34,13 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         ];
     }
 
+    public function __destruct()
+    {
+        foreach (get_class_vars(__CLASS__) as $prop => $_) {
+            unset($this->$prop);
+        }
+    }
+
     public function connectToNSQLookupds(array $addresses)
     {
         foreach ($addresses as $address) {

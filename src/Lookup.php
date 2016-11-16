@@ -60,6 +60,13 @@ class Lookup
         $this->maxConnectionNum = $maxConnectionNum;
     }
 
+    public function __destruct()
+    {
+        foreach (get_class_vars(__CLASS__) as $prop => $_) {
+            unset($this->$prop);
+        }
+    }
+
     public function setNsqdDelegate(NsqdDelegate $delegate)
     {
         $this->delegate = $delegate;

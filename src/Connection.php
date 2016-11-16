@@ -99,6 +99,13 @@ class Connection implements Async
         $this->createClient();
     }
 
+    public function __destruct()
+    {
+        foreach (get_class_vars(__CLASS__) as $prop => $_) {
+            unset($this->$prop);
+        }
+    }
+
     private function createClient()
     {
         $this->client = new SwooleClient(SWOOLE_TCP, SWOOLE_SOCK_ASYNC);

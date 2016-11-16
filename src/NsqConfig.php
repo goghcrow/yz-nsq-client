@@ -32,8 +32,6 @@ class NsqConfig
     private static $disposableConnLifecycle;
     private static $messageAutoResponse;
 
-    // TODO 压平client参数调整参数
-    // 干掉静态变量
     public static function init(array $config)
     {
         $hostname = gethostname();

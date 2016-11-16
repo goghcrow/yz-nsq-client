@@ -3,7 +3,6 @@
 namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Nsq\Utils\Binary;
-use Zan\Framework\Components\Nsq\Utils\MemoryBuffer;
 
 
 class Frame
@@ -26,6 +25,13 @@ class Frame
     public function __construct($bytes)
     {
         $this->unpack($bytes);
+    }
+
+    public function __destruct()
+    {
+        foreach (get_class_vars(__CLASS__) as $prop => $_) {
+            unset($this->$prop);
+        }
     }
 
     /**
