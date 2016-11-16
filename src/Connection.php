@@ -190,23 +190,6 @@ class Connection implements Async
         $this->writeCmd($cmd);
     }
 
-    /**
-     * For Debug Sync Recv Resp
-     */
-    /*
-    public function syncWriteCmd($cmd, $timeout = 1000)
-    {
-        $this->write($cmd);
-        Timer::after($timeout, function () {
-            $this->isWaitingResp = false;
-            call_user_func($this->callback, null, new NsqException("write cmd timeout"));
-        }, $this->getWriteCmdTimeoutTimerId());
-
-        $this->isWaitingResp = true;
-        yield $this;
-    }
-    */
-
     public function getHost()
     {
         return $this->host;
@@ -288,17 +271,6 @@ class Connection implements Async
     {
         $this->lookupAddr = $lookupAddr;
     }
-
-    /*
-    private function sendSyncCmdResp($retval, \Exception $ex = null)
-    {
-        if ($this->isWaitingResp) {
-            $this->isWaitingResp = false;
-            Timer::clearAfterJob($this->getWriteCmdTimeoutTimerId());
-            call_user_func($this->callback, $retval, $ex);
-        }
-    }
-    */
 
     public function onMessageFinish(Message $msg)
     {

@@ -60,7 +60,6 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
     private $stats;
 
-
     /**
      * Consumer constructor.
      * @param $topic
@@ -499,14 +498,9 @@ class Consumer implements ConnDelegate, NsqdDelegate
             }
         } catch (\Exception $ex) {
             sys_echo("consumer handle message fail({$ex->getMessage()}), requeue");
-
         }
 
-        if (NsqConfig::enableBackoff()) {
-            $msg->requeue(-1);
-        } else {
-            $msg->requeueWithoutBackoff(-1);
-        }
+        $msg->requeue(-1, false);
     }
 
     /**

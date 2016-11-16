@@ -25,7 +25,6 @@ class NsqConfig
     private static $rdyRedistributeInterval;
     private static $lowRdyIdleTimeout;
     private static $maxAttempts;
-    private static $enableBackoff;
     private static $maxConnectionPerTopic;
     private static $lookup;
     private static $topic;
@@ -77,7 +76,6 @@ class NsqConfig
         static::$rdyRedistributeInterval    = Arr::get($config, "rdy_redistribute_interval",   5 * 1000);
         static::$lowRdyIdleTimeout          = Arr::get($config, "low_rdy_idle_timeout",        10 * 1000);
         static::$maxAttempts                = Arr::get($config, "max_attempts",                5);
-        static::$enableBackoff              = Arr::get($config, "enable_backoff",              false);
         static::$lookup                     = Arr::get($config, "lookup",                      []);
         static::$topic                      = Arr::get($config, "topic",                       []);
         static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    1);
@@ -158,11 +156,6 @@ class NsqConfig
     public static function getMaxAttempts()
     {
         return static::$maxAttempts;
-    }
-
-    public static function enableBackoff()
-    {
-        return static::$enableBackoff;
     }
 
     public static function getMaxConnectionPerTopic()

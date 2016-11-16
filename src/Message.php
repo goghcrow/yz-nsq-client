@@ -140,25 +140,12 @@ class Message
      * based on the number of attempts and the
      * configured default_requeue_delay
      * @param $delay
+     * @param bool $backoff
      */
-    public function requeue($delay)
+    public function requeue($delay, $backoff = false)
     {
         $this->isResponded = true;
-        $this->delegate->onRequeue($this, $delay, true);
-    }
-
-    /**
-     * RequeueWithoutBackoff sends a REQ command to the nsqd which
-     * sent this message, using the supplied delay.
-     *
-     * Notably, using this method to respond does not trigger a backoff
-     * event on the configured Delegate.
-     * @param $delay
-     */
-    public function requeueWithoutBackoff($delay)
-    {
-        $this->isResponded = true;
-        $this->delegate->onRequeue($this, $delay, false);
+        $this->delegate->onRequeue($this, $delay, $backoff);
     }
 
     /**

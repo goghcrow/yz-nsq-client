@@ -21,11 +21,11 @@ class SQS
         Command::checkTopicChannelName($topic);
         Command::checkTopicChannelName($channel);
 
-        if ($msgHandler instanceof MsgHandler) {
-
-        } else if (is_callable($msgHandler)) {
+        if (is_callable($msgHandler)) {
             $msgHandler = new SimpleMsgHandler($msgHandler);
-        } else {
+        }
+
+        if (!($msgHandler instanceof MsgHandler)) {
             throw new NsqException("invalid msgHandler");
         }
 
@@ -37,16 +37,17 @@ class SQS
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
         }
-        if (is_array($lookup)) {
-            yield $consumer->connectToNSQLookupds($lookup);
-        } else {
-            yield $consumer->connectToNSQLookupd($lookup);
-        }
 
         if (!isset(InitializeSQS::$consumers["$topic:$channel"])) {
             InitializeSQS::$consumers["$topic:$channel"] = [];
         }
         InitializeSQS::$consumers["$topic:$channel"][] = $consumer;
+
+        if (is_array($lookup)) {
+            yield $consumer->connectToNSQLookupds($lookup);
+        } else {
+            yield $consumer->connectToNSQLookupd($lookup);
+        }
     }
 
     /**

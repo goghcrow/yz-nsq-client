@@ -73,9 +73,6 @@ return [
     // "max_requeue_delay" => 60, //s TODO
     // "default_requeue_delay" => 90, //s TODO
 
-    // 是否开启backoff, 发生requeue或处理异常触发backoff
-    "enable_backoff" => false, // TODO
-
     "max_backoff_duration" => 10 * 60 * 1000, // 10min
 
     "message_backoff" => [
