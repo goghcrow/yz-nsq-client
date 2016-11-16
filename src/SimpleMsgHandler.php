@@ -3,7 +3,8 @@
 namespace Zan\Framework\Components\Nsq;
 
 
-use Zan\Framework\Components\Contract\Nsq\MsgHandler;
+
+use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 
 class SimpleMsgHandler implements MsgHandler
 {

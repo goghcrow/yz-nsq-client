@@ -3,6 +3,7 @@
 namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Nsq\Utils\Binary;
+use Zan\Framework\Components\Nsq\Utils\MemoryBuffer;
 
 
 class Frame
@@ -63,7 +64,8 @@ class Frame
             throw new NsqException("length of response is too small");
         }
 
-        $binary = Binary::ofBytes($bytes);
+        $binary = new Binary();
+        $binary->write($bytes);
         $bodySize = $binary->readInt32BE() - 4;
         $this->type = $binary->readInt32BE();
         $this->body = $binary->read($bodySize);

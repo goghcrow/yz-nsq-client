@@ -3,7 +3,7 @@
 namespace Zan\Framework\Components\Nsq;
 
 
-use Zan\Framework\Components\Contract\Nsq\MsgHandler;
+use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 use Zan\Framework\Components\Nsq\Utils\Lock;
 
 class SQS

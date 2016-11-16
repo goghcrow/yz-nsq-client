@@ -1,6 +1,6 @@
 <?php
 
-namespace Zan\Framework\Components\Contract\Nsq;
+namespace Zan\Framework\Components\Nsq\Contract;
 
 
 use Zan\Framework\Components\Nsq\Message;

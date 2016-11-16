@@ -3,8 +3,8 @@
 namespace Zan\Framework\Components\Nsq;
 
 
-use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
-use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
+use Zan\Framework\Components\Nsq\Contract\ConnDelegate;
+use Zan\Framework\Components\Nsq\Contract\NsqdDelegate;
 use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Foundation\Coroutine\Task;

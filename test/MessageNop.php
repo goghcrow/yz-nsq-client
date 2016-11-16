@@ -2,7 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
-use Zan\Framework\Components\Contract\Nsq\MsgDelegate;
+use Zan\Framework\Components\Nsq\Contract\MsgDelegate;
 use Zan\Framework\Components\Nsq\Message;
 
 require_once __DIR__ . "/boot.php";

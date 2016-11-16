@@ -2,7 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq;
 
-use Zan\Framework\Components\Contract\Nsq\MsgDelegate;
+use Zan\Framework\Components\Nsq\Contract\MsgDelegate;
 use Zan\Framework\Components\Nsq\Utils\Binary;
 use Zan\Framework\Utilities\Types\Time;
 
@@ -169,7 +169,8 @@ class Message
             throw new NsqException("not enough data to decode valid message");
         }
 
-        $binary = Binary::ofBytes($bytes);
+        $binary = new Binary();
+        $binary->write($bytes);
         $this->timestamp = $binary->readUInt64BE();
         $this->attempts = $binary->readUInt16BE();
         $this->id = $binary->read(16);

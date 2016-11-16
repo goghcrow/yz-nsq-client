@@ -2,7 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq;
 
-use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
+use Zan\Framework\Components\Nsq\Contract\NsqdDelegate;
 use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Common\HttpClient;
 use Zan\Framework\Network\Common\Response;

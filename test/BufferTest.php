@@ -2,12 +2,23 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
-use Zan\Framework\Components\Nsq\Utils\Buffer;
+use Zan\Framework\Components\Nsq\Utils\MemoryBuffer;
+use Zan\Framework\Components\Nsq\Utils\StringBuffer;
 
 require_once __DIR__ . "/boot.php";
 
+$buffer = new StringBuffer();
+$buffer->write("1234");
+assert($buffer->read(1) === "1");
+assert($buffer->__toString() === "234");
+$buffer->write("56");
+assert($buffer->__toString() === "23456");
+assert($buffer->read(2) === "23");
+$buffer->write("789");
+assert($buffer->__toString() === "456789");
 
-$buffer = new Buffer(5);
+
+$buffer = new MemoryBuffer(5);
 $buffer->write("1234");
 assert($buffer->read(1) === "1");
 assert($buffer->__toString() === "234");
@@ -32,7 +43,7 @@ assert($buffer->capacity() === 12);
 ini_set("memory_limit", "256M");
 
 \TestUtils::cost(function() {
-    $buffer = new Buffer(1024);
+    $buffer = new MemoryBuffer(1024);
     for ($i = 0; $i < 1000000; $i++) {
         $buffer->write((string)$i);
     }

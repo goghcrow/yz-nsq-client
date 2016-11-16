@@ -2,8 +2,8 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
-use Zan\Framework\Components\Contract\Nsq\MsgHandler;
 use Zan\Framework\Components\Nsq\Consumer;
+use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 use Zan\Framework\Components\Nsq\Message;
 use Zan\Framework\Components\Nsq\SQS;
 use Zan\Framework\Foundation\Coroutine\Task;

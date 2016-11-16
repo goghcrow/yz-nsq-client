@@ -3,9 +3,9 @@
 namespace Zan\Framework\Components\Nsq;
 
 
-use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
-use Zan\Framework\Components\Contract\Nsq\MsgHandler;
-use Zan\Framework\Components\Contract\Nsq\NsqdDelegate;
+use Zan\Framework\Components\Nsq\Contract\ConnDelegate;
+use Zan\Framework\Components\Nsq\Contract\MsgHandler;
+use Zan\Framework\Components\Nsq\Contract\NsqdDelegate;
 use Zan\Framework\Components\Nsq\Utils\Backoff;
 use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Foundation\Coroutine\Task;

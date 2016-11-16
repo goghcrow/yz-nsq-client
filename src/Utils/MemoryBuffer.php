@@ -3,6 +3,7 @@
 namespace Zan\Framework\Components\Nsq\Utils;
 
 use swoole_buffer as SwooleBuffer;
+use Zan\Framework\Components\Nsq\Contract\Buffer;
 
 
 /**
@@ -19,7 +20,7 @@ use swoole_buffer as SwooleBuffer;
  * V                   V                  V                  V
  * 0      <=      readerIndex   <=   writerIndex    <=     size
  */
-class Buffer
+class MemoryBuffer implements Buffer
 {
     private $buffer;
 
@@ -93,18 +94,18 @@ class Buffer
         return $this->read($this->readableBytes());
     }
 
-    public function write($str)
+    public function write($bytes)
     {
-        if ($str === "") {
+        if ($bytes === "") {
             return false;
         }
 
-        $len = strlen($str);
+        $len = strlen($bytes);
 
         if ($len <= $this->writableBytes()) {
 
             write:
-            $this->rawWrite($this->writerIndex, $str);
+            $this->rawWrite($this->writerIndex, $bytes);
             $this->writerIndex += $len;
             return true;
         }
@@ -157,13 +158,13 @@ class Buffer
         return $this->buffer->read($offset, $len);
     }
 
-    private function rawWrite($offset, $str)
+    private function rawWrite($offset, $bytes)
     {
-        $len = strlen($str);
+        $len = strlen($bytes);
         if ($offset < 0 || $offset + $len > $this->buffer->capacity) {
             throw new \InvalidArgumentException(__METHOD__ . ": offset=$offset, len=$len, capacity={$this->buffer->capacity}");
         }
-        return $this->buffer->write($offset, $str);
+        return $this->buffer->write($offset, $bytes);
     }
 
     private function expand($size)

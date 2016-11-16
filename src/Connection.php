@@ -3,7 +3,7 @@
 namespace Zan\Framework\Components\Nsq;
 
 use swoole_client as SwooleClient;
-use Zan\Framework\Components\Contract\Nsq\ConnDelegate;
+use Zan\Framework\Components\Nsq\Contract\ConnDelegate;
 use Zan\Framework\Components\Nsq\Utils\Backoff;
 use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Foundation\Coroutine\Task;
