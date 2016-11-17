@@ -4,6 +4,7 @@ namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Nsq\Contract\MsgDelegate;
 use Zan\Framework\Components\Nsq\Utils\Binary;
+use Zan\Framework\Components\Nsq\Utils\ObjectPool;
 use Zan\Framework\Utilities\Types\Time;
 
 
@@ -53,6 +54,16 @@ class Message
         foreach (get_class_vars(__CLASS__) as $prop => $_) {
             unset($this->$prop);
         }
+    }
+
+    public function __clone()
+    {
+        $this->id = null;
+        $this->body = null;
+        $this->timestamp = null;
+        $this->attempts = null;
+        $this->isResponded = false;
+        $this->autoResponse = true;
     }
 
     /**
@@ -176,12 +187,14 @@ class Message
             throw new NsqException("not enough data to decode valid message");
         }
 
-        $binary = new Binary();
+        // $binary = new Binary();
+        $binary = ObjectPool::get(Binary::class);
         $binary->write($bytes);
         $this->timestamp = $binary->readUInt64BE();
         $this->attempts = $binary->readUInt16BE();
         $this->id = $binary->read(16);
         $this->body = $binary->readFull();
+        ObjectPool::release($binary);
     }
 
     /**

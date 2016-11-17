@@ -19,6 +19,20 @@ class Binary implements Buffer
         }
     }
 
+    public function __destruct()
+    {
+        if (is_callable([$this->buffer, "__destruct"])) {
+            /** @noinspection PhpUndefinedMethodInspection */
+            $this->buffer->__destruct();
+        }
+    }
+
+    public function __clone()
+    {
+        $this->buffer = clone $this->buffer;
+        $this->buffer->reset();
+    }
+
     public function writeUInt8($i)
     {
         return $this->buffer->write(pack('C', $i));
@@ -157,5 +171,10 @@ class Binary implements Buffer
     public function readFull()
     {
         return $this->buffer->readFull();
+    }
+
+    public function reset()
+    {
+        return $this->buffer->reset();
     }
 }

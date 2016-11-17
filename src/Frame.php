@@ -3,6 +3,7 @@
 namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Nsq\Utils\Binary;
+use Zan\Framework\Components\Nsq\Utils\ObjectPool;
 
 
 class Frame
@@ -70,10 +71,12 @@ class Frame
             throw new NsqException("length of response is too small");
         }
 
-        $binary = new Binary();
+        // $binary = new Binary();
+        $binary = ObjectPool::get(Binary::class);
         $binary->write($bytes);
         $bodySize = $binary->readInt32BE() - 4;
         $this->type = $binary->readInt32BE();
         $this->body = $binary->read($bodySize);
+        ObjectPool::release($binary);
     }
 }

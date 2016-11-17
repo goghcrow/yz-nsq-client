@@ -20,6 +20,11 @@ class StringBuffer implements Buffer
         unset($this->bytes);
     }
 
+    public function __clone()
+    {
+        $this->bytes = "";
+    }
+
     public function __toString()
     {
         return $this->bytes;
@@ -40,5 +45,10 @@ class StringBuffer implements Buffer
     public function readFull()
     {
         return $this->bytes;
+    }
+
+    public function reset()
+    {
+        $this->bytes = "";
     }
 }

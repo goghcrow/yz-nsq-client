@@ -23,6 +23,7 @@ class BenchMsgHandler implements MsgHandler
     }
 }
 
+
 $task = function()
 {
     $topic = "zan_mqworker_test";
@@ -31,6 +32,10 @@ $task = function()
     $consumer = (yield SQS::subscribe($topic, $ch, new BenchMsgHandler(), 1));
 };
 
-swoole_timer_tick(1000, function() { print_r(SQS::stat()); });
+swoole_timer_tick(1000, function() {
+    print_r(SQS::stat());
+    echo number_format(memory_get_usage()), "byte\n";
+    echo number_format(memory_get_usage(true)), "byte\n";
+});
 
 Task::execute($task());

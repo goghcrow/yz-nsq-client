@@ -10,4 +10,6 @@ interface Buffer
     public function read($len);
 
     public function readFull();
+
+    public function reset();
 }

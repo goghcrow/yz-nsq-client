@@ -9,8 +9,6 @@ namespace Zan\Framework\Components\Nsq\Utils;
  */
 class ObjectPool
 {
-    const POOL_SIZE = 100;
-
     /**
      * @var \SplObjectStorage[]
      * k object
@@ -37,6 +35,7 @@ class ObjectPool
         static::$pool[$class] = [];
         static::$inUse[$class] = [];
 
+        $size = max(1, $size);
         static::$pool[$class][0] = [$object, $size];
 
         for ($i = 1; $i < $size + 1; $i++) {
@@ -61,10 +60,11 @@ class ObjectPool
         }
         unset(static::$inUse[$class][$hash]);
 
-        $pool = static::$pool[$class];
-        $maxSize = $pool[0][1];
+        $maxSize = static::$pool[$class][0][1];
         if (count(static::$pool[$class]) - 1 < $maxSize) {
             static::$pool[$class][$hash] = $object;
+        } else {
+            unset($object);
         }
         return;
     }
@@ -75,18 +75,14 @@ class ObjectPool
             throw new \InvalidArgumentException("$class not in pool");
         }
 
-        $inUse = static::$inUse[$class];
-        /* @var array $pool */
-        $pool = static::$pool[$class];
-
-        if (count($pool) > 1) {
-            $object = array_pop($pool);
+        if (count(static::$pool[$class]) > 1) {
+            /** @noinspection PhpParamsInspection */
+            $object = array_pop(static::$pool[$class]);
         } else {
-            $tpl = static::$pool[$class][0][0];
-            $object = clone $tpl;
+            $object = clone static::$pool[$class][0][0];
         }
 
-        $inUse[spl_object_hash($object)] = $object;
+        static::$inUse[$class][spl_object_hash($object)] = $object;
         return $object;
     }
 }

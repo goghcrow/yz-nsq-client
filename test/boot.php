@@ -1,6 +1,9 @@
 <?php
 
 use Zan\Framework\Components\Nsq\NsqConfig;
+use Zan\Framework\Components\Nsq\Utils\Binary;
+use Zan\Framework\Components\Nsq\Utils\MemoryBuffer;
+use Zan\Framework\Components\Nsq\Utils\ObjectPool;
 use Zan\Framework\Foundation\Core\Debug;
 
 require_once __DIR__ . "/../vendor/autoload.php";
@@ -13,6 +16,7 @@ if (!function_exists("xdebug_break")) {
     function xdebug_break() {}
 }
 
+ObjectPool::create(new Binary(new MemoryBuffer(8192)), 3000);
 
 class TestUtils
 {

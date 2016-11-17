@@ -35,7 +35,7 @@ class MemoryBuffer implements Buffer
         return $self;
     }
 
-    public function __construct($size = 8192)
+    public function __construct($size = 1024)
     {
         $this->buffer = new SwooleBuffer($size);
         $this->readerIndex = 0;
