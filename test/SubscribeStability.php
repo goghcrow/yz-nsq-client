@@ -33,10 +33,10 @@ $task = function()
     $consumer = (yield SQS::subscribe($topic, $ch, new BenchMsgHandler2(), 1));
 };
 
-swoole_timer_tick(1000, function() {
-    print_r(SQS::stat());
-    echo number_format(memory_get_usage()), "byte\n";
-    echo number_format(memory_get_usage(true)), "byte\n";
-});
+//swoole_timer_tick(1000, function() {
+//    print_r(SQS::stat());
+//    echo number_format(memory_get_usage()), "byte\n";
+//    echo number_format(memory_get_usage(true)), "byte\n";
+//});
 
 Task::execute($task());
