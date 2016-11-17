@@ -303,15 +303,15 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     }
 
     public function onReceive(Connection $conn, $bytes) {
-        if (Debug::get()) {
-            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
-        }
+//        if (Debug::get()) {
+//            sys_echo("nsq({$conn->getAddr()}) recv:" . str_replace("\n", "\\n", $bytes));
+//        }
     }
 
     public function onSend(Connection $conn, $bytes) {
-        if (Debug::get()) {
-            sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
-        }
+//        if (Debug::get()) {
+//            sys_echo("nsq({$conn->getAddr()}) send:" . str_replace("\n", "\\n", $bytes));
+//        }
     }
 
     public function onHeartbeat(Connection $conn) {}
