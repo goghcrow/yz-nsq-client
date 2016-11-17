@@ -15,7 +15,7 @@ class BenchMsgHandler2 implements MsgHandler
 
     public function handleMessage(Message $message, Consumer $consumer)
     {
-        yield taskSleep(500);
+        yield taskSleep(100);
     }
 
     public function logFailedMessage(Message $message, Consumer $consumer)
@@ -24,6 +24,8 @@ class BenchMsgHandler2 implements MsgHandler
     }
 }
 
+ini_set("memory_limit", "1024m");
+cli_set_process_title(__FUNCTION__);
 
 $task = function()
 {
