@@ -22,7 +22,7 @@ class Message
     private $body;
 
     /**
-     * @var float
+     * @var string
      */
     private $timestamp;
 
