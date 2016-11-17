@@ -187,6 +187,7 @@ class Message
             throw new NsqException("not enough data to decode valid message");
         }
 
+        /* @var Binary $binary */
         // $binary = new Binary();
         $binary = ObjectPool::get(Binary::class);
         $binary->write($bytes);

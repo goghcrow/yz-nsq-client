@@ -71,6 +71,7 @@ class Frame
             throw new NsqException("length of response is too small");
         }
 
+        /* @var Binary $binary */
         // $binary = new Binary();
         $binary = ObjectPool::get(Binary::class);
         $binary->write($bytes);

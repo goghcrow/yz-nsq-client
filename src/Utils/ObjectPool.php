@@ -5,7 +5,7 @@ namespace Zan\Framework\Components\Nsq\Utils;
 
 /**
  * Class ObjectPool
- * fix size object pool
+ * fixed size object pool
  */
 class ObjectPool
 {
