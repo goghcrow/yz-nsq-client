@@ -25,7 +25,7 @@ class BenchMsgHandler2 implements MsgHandler
 }
 
 ini_set("memory_limit", "1024m");
-cli_set_process_title(__FUNCTION__);
+cli_set_process_title(__FILE__);
 
 $task = function()
 {

@@ -9,7 +9,7 @@ use Zan\Framework\Foundation\Coroutine\Task;
 require_once __DIR__ . "/boot.php";
 
 ini_set("memory_limit", "1024m");
-cli_set_process_title(__FUNCTION__);
+cli_set_process_title(__FILE__);
 
 $taskPub = function () {
     $payload = str_repeat("a", 1024 * 2);
