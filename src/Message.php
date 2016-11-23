@@ -67,7 +67,7 @@ class Message
     }
 
     /**
-     * @return int
+     * @return string
      */
     public function getId()
     {
@@ -83,7 +83,7 @@ class Message
     }
 
     /**
-     * @return float
+     * @return string
      */
     public function getTimestamp()
     {

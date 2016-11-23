@@ -17,12 +17,52 @@ class TestMsgHandler implements MsgHandler
 
     public function handleMessage(Message $message, Consumer $consumer)
     {
+        echo $message->getId(), "\n";
+        yield taskSleep(1000);
     }
 
     public function logFailedMessage(Message $message, Consumer $consumer)
     {
+        echo "fail: ", $message->getId(), "\n";
     }
 }
+
+// auto response + msgHandlerCallback
+$task1 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    /* @var Consumer $consumer */
+    $consumer = (yield SQS::subscribe($topic, $ch, function(Message $msg, Consumer $consumer) {
+        echo $msg->getId(), "\n";
+        yield taskSleep(1000);
+    }));
+    swoole_timer_after(3000, function() use($consumer) {
+        $consumer->stop();
+    });
+};
+Task::execute($task1());
+
+// auto response + TestMsgHandlerImpl
+$task2 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    $msgHandler = new TestMsgHandler();
+    yield SQS::subscribe($topic, $ch, $msgHandler);
+};
+Task::execute($task2());
+
+
+$task2 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    yield SQS::subscribe($topic, $ch, function(Message $msg) {
+        $msg->disableAutoResponse();
+        $msg->finish();
+        $msg->touch();
+        // $msg->requeue($delay, $isBackoff);
+    });;
+};
+
 
 $task = function()
 {
@@ -73,4 +113,3 @@ $task = function()
 };
 
 
-Task::execute($task());

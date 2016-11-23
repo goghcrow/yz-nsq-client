@@ -120,6 +120,9 @@ class SQS
         }
     }
 
+    /**
+     * @return array
+     */
     public static function stat()
     {
         $stat = [

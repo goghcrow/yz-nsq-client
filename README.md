@@ -1,5 +1,131 @@
-<?php
+# Zan NSQ-Client
 
+## API
+
+```php
+<?php
+class SQS
+{
+    /**
+     * 订阅
+     * @param string $topic
+     * @param string $channel
+     * @param MsgHandler|callable $msgHandler
+     * @param int $maxInFlight
+     * @return \Generator yield return Consumer
+     * @throws NsqException
+     */
+    public static function subscribe($topic, $channel, $msgHandler, $maxInFlight = -1);
+    
+    /**
+     * 取消订阅
+     * @param string $topic
+     * @param string $channel
+     * @return bool
+     */
+    public static function unSubscribe($topic, $channel);
+    
+    /**
+     * 发布
+     * @param string $topic
+     * @param string[] ...$messages
+     * @return \Generator yield bool
+     * @throws NsqException
+     */
+    public static function publish($topic, ...$messages);
+    
+    /**
+     * 统计信息
+     * @return array
+     */    
+    public static function stat();
+}
+```
+
+```php
+<?php
+class Message
+{
+    /**
+     * @return string
+     */
+    public function getId();
+    
+    /**
+     * @return string
+     */
+    public function getBody();
+
+    /**
+     * @return string
+     */
+    public function getTimestamp();
+    
+    /**
+     * @return int
+     */
+    public function getAttempts();
+    
+    /**
+     * 关闭自动回复 
+     * DisableAutoResponse disables the automatic response that
+     * would normally be sent when a MsgHandler:;handleMessage
+     * returns (FIN/REQ based on the value returned).
+     * @return void
+     */
+    public function disableAutoResponse();
+    
+    /**
+     * IsAutoResponseDisabled indicates whether or not this message
+     * will be responded to automatically
+     * @return bool
+     */
+    public function isAutoResponse();
+    
+    /**
+     * HasResponded indicates whether or not this message has been responded to
+     * @return bool
+     */
+    public function hasResponsed();
+    
+    /**
+     * 完成该消息
+     * Finish sends a FIN command to the nsqd which
+     * sent this message
+     */
+    public function finish();
+    
+    /**
+     * 更新服务端消息超时时间
+     * Touch sends a TOUCH command to the nsqd which
+     * sent this message
+     */
+    public function touch();
+    
+    /**
+     * 重试该消息
+     * Requeue sends a REQ command to the nsqd which
+     * sent this message, using the supplied delay.
+     *
+     * A delay of -1 will automatically calculate
+     * based on the number of attempts and the
+     * configured default_requeue_delay
+     * @param int $delay ms
+     * @param bool $backoff
+     */
+    public function requeue($delay, $backoff = false);
+
+}
+```
+
+
+## Config
+
+首先要添加nsq节点配置
+
+config/env/nsq.php
+
+```php
 /**
  * 说明:
  * 1. 只有lookup项必填, 其他全部选填
@@ -15,6 +141,8 @@ return [
     "topic" => [
         "zan_mqworker_test",
     ],
+
+
 
     // ====================================== 以下选择性配置 ====================================
     // ======================================  identity  ======================================
@@ -61,7 +189,7 @@ return [
     "nsqd_connect_timeout" => 3 * 1000,
 
     // lookup连接超时时间
-    "nsqlookupd_connect_timeout" => 3 * 1000,
+    "nsqlookupd_connect_timeout" => 3 * 000,
 
     // 通过lookupd更新nsqd节点周期
     // Duration between polling lookupd for new producers, and fractional jitter to add to
@@ -135,3 +263,71 @@ return [
     // auth 不支持
     // "auto_secret" => "",
 ];
+```
+
+## Example
+
+### Publish:
+
+```php
+<?php
+function taskPub()
+{
+    $topic = "zan_mqworker_test";
+
+    $oneMsg = "hello";
+    $multiMsgs = [
+        "hello",
+        "hi",
+    ];
+
+    /* @var Producer $producer */
+    $ok = (yield SQS::publish($topic, $oneMsg));
+    $ok = (yield SQS::publish($topic, "hello", "hi"));
+    $ok = (yield SQS::publish($topic, ...$multiMsgs));
+}
+
+Task::execute(taskPub());
+
+```
+
+### Subscribe: 
+
+```php
+// auto response + msgHandlerCallback
+$task1 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    /* @var Consumer $consumer */
+    $consumer = (yield SQS::subscribe($topic, $ch, function(Message $msg, Consumer $consumer) {
+        echo $msg->getId(), "\n";
+        yield taskSleep(1000);
+    }));
+    swoole_timer_after(3000, function() use($consumer) {
+        $consumer->stop();
+    });
+};
+Task::execute($task1());
+
+// auto response + TestMsgHandlerImpl
+$task2 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    $msgHandler = new TestMsgHandler();
+    yield SQS::subscribe($topic, $ch, $msgHandler);
+};
+Task::execute($task2());
+
+
+$task2 = function() {
+    $topic = "zan_mqworker_test";
+    $ch = "ch1";
+    yield SQS::subscribe($topic, $ch, function(Message $msg) {
+        // $msg->disableAutoResponse();
+        // $msg->finish();
+        // $msg->touch();
+        // $msg->requeue($delay, $isBackoff);
+    });;
+};
+```
+

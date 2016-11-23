@@ -495,7 +495,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
         try {
             $result = (yield $this->msgHandler->handleMessage($msg, $this));
-            if (!$msg->isAutoResponse()) {
+            if (!$msg->isAutoResponse() || $msg->hasResponsed()) {
                 return;
             }
             if ($result !== false) {
