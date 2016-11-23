@@ -294,6 +294,7 @@ Task::execute(taskPub());
 ### Subscribe: 
 
 ```php
+<?php
 // auto response + msgHandlerCallback
 $task1 = function() {
     $topic = "zan_mqworker_test";
@@ -323,10 +324,10 @@ $task2 = function() {
     $topic = "zan_mqworker_test";
     $ch = "ch1";
     yield SQS::subscribe($topic, $ch, function(Message $msg) {
-        // $msg->disableAutoResponse();
         // $msg->finish();
         // $msg->touch();
         // $msg->requeue($delay, $isBackoff);
+        // throw new \Exception()
     });;
 };
 ```
