@@ -7,7 +7,6 @@ use Zan\Framework\Components\Nsq\Contract\ConnDelegate;
 use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 use Zan\Framework\Components\Nsq\Contract\NsqdDelegate;
 use Zan\Framework\Components\Nsq\Utils\Backoff;
-use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;
 use Zan\Framework\Utilities\Types\Time;
@@ -203,7 +202,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
             case static::BackoffSignal:
                 $nextBackoff = $this->getNextBackoff($this->backoffCounter + 1);
-                if ($nextBackoff <= NsqConfig::getMaxBackoffDuration()) {
+                if ($nextBackoff <= NsqConfig::getMessageBackoff()["max"]) {
                     $this->backoffCounter++;
                     $backoffUpdated = true;
                 }
@@ -222,7 +221,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
         } else if ($this->backoffCounter > 0) {
             // 开始或继续back状态
             $backoffDuration = $this->getNextBackoff($this->backoffCounter);
-            $backoffDuration = min(NsqConfig::getMaxBackoffDuration(), $backoffDuration);
+            $backoffDuration = min(NsqConfig::getMessageBackoff()["max"], $backoffDuration);
             sys_echo("backing off for ${backoffDuration}ms (backoff level {$this->backoffCounter}), setting all to RDY 0");
 
             foreach ($this->getNsqdConns() as $conn) {

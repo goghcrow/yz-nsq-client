@@ -288,7 +288,11 @@ class Connection implements Async
     {
         if ($delay === -1) {
             $c = NsqConfig::getMessageBackoff();
-            $delay = Backoff::calculate($msg->getAttempts(), $c["min"], $c["max"], $c["factor"], $c["jitter"]);
+            if ($c["max"] === 0) {
+                $delay = 0;
+            } else {
+                $delay = Backoff::calculate($msg->getAttempts(), $c["min"], $c["max"], $c["factor"], $c["jitter"]);
+            }
         }
         $this->writeMessage($msg, Command::requeue($msg, $delay), false, $backoff);
     }
