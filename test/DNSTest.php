@@ -2,7 +2,7 @@
 
 namespace Zan\Framework\Components\Nsq\Test;
 
-use Zan\Framework\Components\Nsq\Dns;
+use Zan\Framework\Components\Nsq\Utils\Dns;
 use Zan\Framework\Foundation\Coroutine\Task;
 
 require_once __DIR__ . "/boot.php";
