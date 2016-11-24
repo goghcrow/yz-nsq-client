@@ -1,1 +1,0 @@
-http://nsq.io/clients/tcp_protocol_spec.html
