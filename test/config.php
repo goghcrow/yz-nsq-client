@@ -14,6 +14,7 @@ return [
     // ["建议填写"] 需要publish的topic列表, 预先配置, 会在workerStart时候建立好连接
     "topic" => [
         "zan_mqworker_test",
+        "toc_web",
     ],
 
     // ====================================== 以下选择性配置 ====================================
@@ -96,7 +97,7 @@ return [
 
     // pipe_count: 设置当前消费者实例(多个NSQD连接)最大允许的in-flight消息数量, 每个nsqd连接均分
     // Maximum number of messages to allow in flight (concurrency knob)
-    "max_in_flight" => 10, //2500,
+    "max_in_flight" => 2, //2500,
 
     // 每个topic的最大nsqd连接数, 最小值为lookup节点查询当前nsqd数量
     // max(count($nsqdList), $this->maxConnectionNum)
