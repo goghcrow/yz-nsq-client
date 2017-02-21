@@ -67,7 +67,7 @@ class NsqConfig
         static::$packetSizeLimit            = Arr::get($config, "packet_size_limit",           327679);
         static::$lookupdPollInterval        = Arr::get($config, "lookupd_poll_interval",       60 * 1000);
         static::$lookupdPollJitter          = Arr::get($config, "lookupd_poll_jitter",         0.3);
-        static::$maxInFlightCount           = Arr::get($config, "max_in_flight",               10);
+        static::$maxInFlightCount           = Arr::get($config, "max_in_flight",               1);
         static::$delayingCloseTime          = Arr::get($config, "delaying_close_time",         5 * 1000);
         static::$rdyRedistributeInterval    = Arr::get($config, "rdy_redistribute_interval",   5 * 1000);
         static::$lowRdyIdleTimeout          = Arr::get($config, "low_rdy_idle_timeout",        10 * 1000);

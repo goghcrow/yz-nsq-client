@@ -5,6 +5,7 @@ namespace Zan\Framework\Components\Nsq;
 
 use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 use Zan\Framework\Components\Nsq\Utils\Lock;
+use Zan\Framework\Utilities\Types\Json;
 
 class SQS
 {
@@ -91,7 +92,7 @@ class SQS
             if (is_scalar($message)) {
                 $messages[$i] = /*strval(*/$message/*)*/;
             } else {
-                $messages[$i] = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $messages[$i] = Json::encode($message);
             }
         }
 
@@ -114,9 +115,11 @@ class SQS
         if ($resp === "OK") {
             yield true;
         } else {
-            $msgStr = implode("//", $messages);
-            sys_echo("publish fail, [topic=>$topic, msg=$msgStr, resp=$resp]");
-            yield false;
+            throw new NsqException("publish fail", 0, null, [
+                "topic" => $topic,
+                "msg"   => $messages,
+                "resp"  => $resp,
+            ]);
         }
     }
 

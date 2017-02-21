@@ -59,6 +59,10 @@
         },
         {
             "type": "git",
+            "url": "git@gitlab.qima-inc.com:nova-service/generic.git"
+        },
+        {
+            "type": "git",
             "url": "git@gitlab.qima-inc.com:nova-service/material.git"
         },
         {
