@@ -6,6 +6,7 @@ namespace Zan\Framework\Components\Nsq;
 use Zan\Framework\Components\Nsq\Utils\Binary;
 use Zan\Framework\Components\Nsq\Utils\MemoryBuffer;
 use Zan\Framework\Components\Nsq\Utils\ObjectPool;
+use Zan\Framework\Components\Nsq\Utils\StringBuffer;
 use Zan\Framework\Contract\Network\Bootable;
 use Zan\Framework\Foundation\Core\Config;
 use Zan\Framework\Foundation\Coroutine\Task;
@@ -24,7 +25,7 @@ class InitializeSQS implements Bootable
 
     public function bootstrap($server)
     {
-        ObjectPool::create(new Binary(new MemoryBuffer(8192)), 3000);
+        ObjectPool::create(new Binary(new StringBuffer(8192)), 3000);
 
         NsqConfig::init(Config::get("nsq", []));
 
