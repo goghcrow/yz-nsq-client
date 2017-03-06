@@ -25,7 +25,7 @@ class InitializeSQS implements Bootable
 
     public function bootstrap($server)
     {
-        ObjectPool::create(new Binary(new StringBuffer(8192)), 3000);
+        ObjectPool::create(new Binary(new MemoryBuffer(8192)), 3000);
 
         NsqConfig::init(Config::get("nsq", []));
 
