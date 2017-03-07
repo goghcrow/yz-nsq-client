@@ -91,6 +91,9 @@ class MemoryBuffer implements Buffer
         $len = min($len, $this->readableBytes());
         $read = $this->rawRead($this->readerIndex, $len);
         $this->readerIndex += $len;
+        if ($this->readerIndex === $this->writerIndex) {
+            $this->reset();
+        }
         return $read;
     }
 
