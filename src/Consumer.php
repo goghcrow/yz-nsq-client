@@ -555,7 +555,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
         yield $this->handleMessage($msg);
         // 收到消息后更新rdy
-        $this->maybeUpdateRDY($conn);
+        // 李文告知不需要每次收到消息就调整RDY
+        // $this->maybeUpdateRDY($conn);
     }
 
     /**
