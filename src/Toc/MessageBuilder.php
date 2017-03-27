@@ -82,6 +82,7 @@ class MessageBuilder
         $body = [
             'bizID' => $this->bizID,
             'bizExtraID' => $this->bizExtraID,
+            'shardingID' => $this->shardingID,
             'taskType' => $this->taskType,
             'taskOption' => $this->opt,
             'delayEndTime' => $this->endTime,
