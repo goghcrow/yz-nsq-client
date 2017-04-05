@@ -41,6 +41,13 @@ class MessageBuilder
         return $this;
     }
 
+    public function shardingID($shardingID)
+    {
+        $this->shardingID = $shardingID;
+        return $this;
+    }
+
+
     /***
      * 任务到期时间
      * 单位为秒的长整
@@ -65,11 +72,17 @@ class MessageBuilder
         return $this;
     }
 
+    public function cancelOpt(){
+        $this->opt = 'TASK_CANCEL';
+        return $this;
+    }
+
     public function build()
     {
         $body = [
             'bizID' => $this->bizID,
             'bizExtraID' => $this->bizExtraID,
+            'shardingID' => $this->shardingID,
             'taskType' => $this->taskType,
             'taskOption' => $this->opt,
             'delayEndTime' => $this->endTime,
