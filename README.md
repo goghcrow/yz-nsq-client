@@ -139,6 +139,19 @@ return [
 ];
 ```
 
+配置 WorkerStart, 参考
+
+./init/WorkerStart/.config.php
+
+```php
+<?php
+use Zan\Framework\Components\Nsq\InitializeSQS;
+
+return [
+    InitializeSQS::class,
+];
+```
+
 ## Example
 
 ### Publish:
