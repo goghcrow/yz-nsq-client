@@ -10,6 +10,7 @@ namespace Zan\Framework\Components\Nsq;
 
 
 use Zan\Framework\Components\Nsq\Toc\TocException;
+use Zan\Framework\Foundation\Core\Config;
 use Zan\Framework\Utilities\Types\Json;
 
 class TOC
@@ -18,7 +19,7 @@ class TOC
      * 默认接受消息的topic
      * @var string
      */
-    private static $receiveTopic = "toc_web";
+    private static $receiveTopic;
 
     /***
      * 推送命令至toc
@@ -36,6 +37,9 @@ class TOC
     public static function sendCommand($package, $topic = null)
     {
         if ($topic === null) {
+            if (self::$receiveTopic === null) {
+                self::$receiveTopic = Config::get("zan_toc.topic", "toc_web");
+            }
             $topic = self::$receiveTopic;
         }
         $packageStr = Json::encode($package);

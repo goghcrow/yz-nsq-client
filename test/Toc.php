@@ -10,10 +10,10 @@ namespace Zan\Framework\Components\Nsq\Test;
 
 use Zan\Framework\Components\Nsq\TOC;
 use Zan\Framework\Components\Nsq\Toc\MessageBuilder;
+use Zan\Framework\Foundation\Core\Config;
 use Zan\Framework\Foundation\Coroutine\Task;
 
 require_once __DIR__ . "/boot.php";
-
 
 function testToc()
 {
