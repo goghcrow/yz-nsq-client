@@ -18,6 +18,7 @@ class TestMsgHandler implements MsgHandler
     public function handleMessage(Message $message, Consumer $consumer)
     {
         echo $message->getId(), "\n";
+        echo $message->getBody(), "\n";
         yield taskSleep(1000);
     }
 
@@ -31,16 +32,22 @@ class TestMsgHandler implements MsgHandler
 $task1 = function() {
     $topic = "zan_mqworker_test";
     $ch = "ch1";
+
+
     /* @var Consumer $consumer */
     $consumer = (yield SQS::subscribe($topic, $ch, function(Message $msg, Consumer $consumer) {
-        echo $msg->getId(), "\n";
+        echo "recv: " . $msg->getBody(), "\n";
+        // echo $msg->getId(), "\n";
         yield taskSleep(1000);
     }));
     swoole_timer_after(3000, function() use($consumer) {
         $consumer->stop();
+        // swoole_event_exit();
     });
 };
-Task::execute($task1());
+// Task::execute($task1());
+
+
 
 // auto response + TestMsgHandlerImpl
 $task2 = function() {
@@ -49,7 +56,9 @@ $task2 = function() {
     $msgHandler = new TestMsgHandler();
     yield SQS::subscribe($topic, $ch, $msgHandler);
 };
-Task::execute($task2());
+
+// Task::execute($task2());
+
 
 
 $task2 = function() {
@@ -71,11 +80,10 @@ $task = function()
 
     /* @var Consumer $consumer */
     $consumer = (yield SQS::subscribe($topic, $ch, function(Message $msg, Consumer $consumer) {
-//         print_r($consumer->stats());
+        // print_r($consumer->stats());
         // var_dump($consumer->isStarved());
 
 
-        echo $msg, "\n";
         yield taskSleep(1000);
         $consumer->changeMaxInFlight(10);
 
@@ -93,9 +101,6 @@ $task = function()
     }, 1));
 
 
-    // 在backoff期间如何close ?!
-    // TODO write "FIN xxx fail, because connection is closing
-
     // core
     Timer::after(5000, function() use($consumer) {
         $consumer->stop();
@@ -111,5 +116,4 @@ $task = function()
 //        });
 //    });
 };
-
 

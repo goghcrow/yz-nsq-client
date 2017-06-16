@@ -60,13 +60,6 @@ class Lookup
         $this->maxConnectionNum = $maxConnectionNum;
     }
 
-    public function __destruct()
-    {
-        foreach (get_class_vars(__CLASS__) as $prop => $_) {
-            unset($this->$prop);
-        }
-    }
-
     public function setNsqdDelegate(NsqdDelegate $delegate)
     {
         $this->delegate = $delegate;
@@ -103,6 +96,34 @@ class Lookup
     }
 
     /**
+     * an Tick Timer to discover nsqd producers for the configured topic.
+     * @return void
+     */
+    private function lookupdPollingTick()
+    {
+        // add some jitter
+        $jitter = (float)rand() / (float)getrandmax()
+            * NsqConfig::getLookupdPollJitter()
+            * NsqConfig::getLookupdPollInterval();
+
+        Timer::after(intval($jitter) + 1, function() {
+            if ($this->isStopped) {
+                return;
+            }
+
+            Timer::tick(NsqConfig::getLookupdPollInterval(), function() {
+                try {
+                    Task::execute($this->queryLookupd());
+                } catch (\Throwable $t) {
+                    sys_echo("lookupdPolling exception {$t->getMessage()}");
+                } catch (\Exception $ex) {
+                    sys_echo("lookupdPolling exception {$ex->getMessage()}");
+                }
+            }, $this->lookupdPollingTickId());
+        });
+    }
+
+    /**
      * DisconnectFromNSQLookupd removes the specified `nsqlookupd` address
      * from the list used for periodic discovery and close all nsqd connection
      * discover from the address
@@ -136,9 +157,31 @@ class Lookup
      * to discover which nsqd's provide the topic we are consuming.
      * initiate a connection to any new producers that are identified.
      * @param null|string $lookupdAddr
-     * @return mixed
+     * @return \Generator
      */
-    private function queryLookupd($lookupdAddr = null)
+    public function queryLookupd($lookupdAddr = null)
+    {
+        $nsqdList = (yield $this->queryNSQDListWithRetry($lookupdAddr));
+
+        foreach ($nsqdList as list($host, $port)) {
+            try {
+                /* @var Connection[] $conns */
+                $conns = (yield $this->connectToNSQD($host, $port));
+                foreach ($conns as $conn) {
+                    $conn->setLookupAddr($lookupdAddr);
+                    if ($this->delegate) {
+                        $this->delegate->onConnect($conn);
+                    }
+                }
+            } catch (\Throwable $t) {
+                sys_echo("($host:$port) error connecting to nsqd - {$t->getMessage()}");
+            } catch (\Exception $ex) {
+                sys_echo("($host:$port) error connecting to nsqd - {$ex->getMessage()}");
+            }
+        }
+    }
+
+    private function queryNSQDListWithRetry($lookupdAddr = null, $n = 3)
     {
         $nsqdList = [];
         $lookupdAddr = $lookupdAddr ?: $this->nextLookupdEndpoint();
@@ -155,52 +198,22 @@ class Lookup
             }
             $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
             $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
-        } catch (\Exception $ex) {
+        } catch (\Throwable $ex) {
+        } catch (\Exception $ex) { }
+
+        if (isset($ex)) {
             sys_echo("($lookupdAddr) error query nsqd - {$ex->getMessage()}");
-        }
+            echo_exception($ex);
 
-        // TODO parallel connect
-        foreach ($nsqdList as list($host, $port)) {
-            try {
-                /* @var Connection[] $conns */
-                $conns = (yield $this->connectToNSQD($host, $port));
-                foreach ($conns as $conn) {
-                    $conn->setLookupAddr($lookupdAddr);
-                    if ($this->delegate) {
-                        $this->delegate->onConnect($conn);
-                    }
-                }
-            } catch (\Exception $ex) {
-                sys_echo("($host:$port) error connecting to nsqd - {$ex->getMessage()}");
+            if (--$n > 0) {
+                yield taskSleep(500);
+                yield $this->queryNSQDListWithRetry($lookupdAddr, $n);
+            } else {
+                yield $nsqdList;
             }
+        } else {
+            yield $nsqdList;
         }
-        return; // for ide
-    }
-
-    /**
-     * an Tick Timer to discover nsqd producers for the configured topic.
-     * @return void
-     */
-    private function lookupdPollingTick()
-    {
-        // add some jitter
-        $jitter = (float)rand() / (float)getrandmax()
-            * NsqConfig::getLookupdPollJitter()
-            * NsqConfig::getLookupdPollInterval();
-
-        Timer::after(intval($jitter) + 1, function() {
-            if ($this->isStopped) {
-                return;
-            }
-
-            Timer::tick(NsqConfig::getLookupdPollInterval(), function() {
-                try {
-                    Task::execute($this->queryLookupd());
-                } catch (\Exception $ex) {
-                    sys_echo("lookupdPolling exception {$ex->getMessage()}");
-                }
-            }, $this->lookupdPollingTickId());
-        });
     }
 
     /**
@@ -212,6 +225,7 @@ class Lookup
      * @return mixed yield List<Connection>
      * @throws NsqException
      * @throws \Exception
+     * @throws \Throwable
      */
     public function connectToNSQD($host, $port)
     {
@@ -229,8 +243,7 @@ class Lookup
         $remainNum = max($perNsqdMaxNum - $currentNum, 0);
 
         $nsqdConns = [];
-        for ($i = 0; $i < $remainNum; $i++)
-        {
+        for ($i = 0; $i < $remainNum; $i++) {
             try {
                 $this->nsqdTCPAddrsConnNum[$addr]++;
 
@@ -246,13 +259,15 @@ class Lookup
                 }
 
                 $nsqdConns[] = $conn;
+            } catch (\Throwable $t) {
+                $this->nsqdTCPAddrsConnNum[$addr]--;
+                throw $t;
             } catch (\Exception $ex) {
                 $this->nsqdTCPAddrsConnNum[$addr]--;
                 throw $ex;
             }
         }
         yield $nsqdConns;
-        return;
     }
 
     /**
@@ -311,6 +326,9 @@ class Lookup
                 // trigger a poll of the lookupd
                 yield $this->queryLookupd();
                 yield true;
+            } catch (\Throwable $t) {
+                sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$t->getMessage()}");
+                yield false;
             } catch (\Exception $ex) {
                 sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$ex->getMessage()}");
                 yield false;
@@ -337,6 +355,8 @@ class Lookup
 
             try {
                 Task::execute($this->connectToNSQD($conn->getHost(), $conn->getPort()));
+            } catch (\Throwable $t) {
+                sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$t->getMessage()}");
             } catch (\Exception $ex) {
                 sys_echo("({$conn->getAddr()}) error reconnecting to nsqd - {$ex->getMessage()}");
             }

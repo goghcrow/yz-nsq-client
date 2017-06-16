@@ -40,6 +40,8 @@ class InitializeSQS implements Bootable
                 $values = array_fill(0, count($topics), $num);
                 $conf = array_combine($topics, $values);
                 yield static::initProducers($conf);
+            } catch (\Throwable $t) {
+                echo_exception($t);
             } catch (\Exception $ex) {
                 echo_exception($ex);
             }
@@ -62,7 +64,7 @@ class InitializeSQS implements Bootable
 
         foreach ($conf as $topic => $connNum) {
             Command::checkTopicChannelName($topic);
-            if (isset($producer[$topic])) {
+            if (isset(static::$producers[$topic])) {
                 continue;
             }
 

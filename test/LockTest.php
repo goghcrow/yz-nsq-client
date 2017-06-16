@@ -8,7 +8,7 @@ use Zan\Framework\Network\Server\Timer\Timer;
 
 require_once __DIR__ . "/boot.php";
 
-// 调度器并发任务产生的数据静态
+// 调度器并发任务产生的数据竞态
 // asyncSetOnce方法为临界区
 
 
@@ -150,9 +150,6 @@ class OnceTest3
         static::$locked = false;
     }
 
-
-
-
     private static $raceData = [];
 
     public static function get($key)
@@ -186,7 +183,6 @@ class OnceTest3
 //    echo "final result: " . OnceTest3::get("hello"), "\n";
 //};
 //Task::execute($task());
-
 
 
 class SpinLock1
@@ -497,8 +493,6 @@ $task = function() {
 };
 
 //Task::execute($task());
-
-
 
 
 

@@ -19,10 +19,37 @@ function taskPub()
         "hi",
     ];
 
+
     /* @var Producer $producer */
-    $ok = (yield SQS::publish($topic, $oneMsg));
-    $ok = (yield SQS::publish($topic, "hello", "hi"));
-    $ok = (yield SQS::publish($topic, ...$multiMsgs));
+    try {
+        $ok = (yield SQS::publish($topic, $oneMsg));
+        var_dump($ok);
+    } catch (\Throwable $t) {
+        echo_exception($t);
+    } catch (\Exception $e) {
+        echo_exception($e);
+    }
+
+    try {
+        $ok = (yield SQS::publish($topic, "hello", "hi"));
+        var_dump($ok);
+    } catch (\Throwable $t) {
+        echo_exception($t);
+    } catch (\Exception $e) {
+        echo_exception($e);
+    }
+
+    try {
+        $ok = (yield SQS::publish($topic, ...$multiMsgs));
+        var_dump($ok);
+    } catch (\Throwable $t) {
+        echo_exception($t);
+    } catch (\Exception $e) {
+        echo_exception($e);
+    }
+
+
+    swoole_event_exit();
 }
 
 Task::execute(taskPub());

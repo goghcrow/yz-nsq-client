@@ -84,13 +84,6 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->bootRedistributeRDYTick();
     }
 
-    public function __destruct()
-    {
-        foreach (get_class_vars(__CLASS__) as $prop => $_) {
-            unset($this->$prop);
-        }
-    }
-
     /**
      * @param $address
      * @return \Generator Consumer
@@ -264,7 +257,11 @@ class Consumer implements ConnDelegate, NsqdDelegate
             // while in backoff only ever let 1 message at a time through
             try {
                 $this->updateRDY($choice, 1);
+            } catch (\Throwable $ex) {
             } catch (\Exception $ex) {
+            }
+
+            if (isset($ex)) {
                 sys_echo("({$choice->getAddr()}) error resuming RDY 1 - {$ex->getMessage()}");
                 sys_echo("backing off for 1 seconds");
                 $this->backoff(1000);
@@ -355,6 +352,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
                 $this->doRedistributeRDY();
 
+            } catch (\Throwable $t) {
+                sys_echo("redistributeRDY exception {$t->getMessage()}");
             } catch (\Exception $ex) {
                 sys_echo("redistributeRDY exception {$ex->getMessage()}");
             }
@@ -393,6 +392,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
             $conn = $possibleConns[$i];
             try {
                 $this->updateRDY($conn, 1);
+            } catch (\Throwable $t) {
+                sys_echo("nsq update rdy exception: {$t->getMessage()}");
             } catch (\Exception $ex) {
                 sys_echo("nsq update rdy exception: {$ex->getMessage()}");
             }
@@ -434,6 +435,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
             Timer::after(5000, function() use($conn, $count) {
                 try {
                     $this->updateRDY($conn, $count);
+                } catch (\Throwable $t) {
+                    sys_echo("update rdy exception: {$t->getMessage()}");
                 } catch (\Exception $ex) {
                     sys_echo("update rdy exception: {$ex->getMessage()}");
                 }
@@ -502,6 +505,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
                 $msg->finish();
                 return;
             }
+        } catch (\Throwable $t) {
+            sys_echo("consumer handle message fail({$t->getMessage()}), requeue");
         } catch (\Exception $ex) {
             sys_echo("consumer handle message fail({$ex->getMessage()}), requeue");
         }
@@ -536,6 +541,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
             foreach ($this->getNsqdConns() as $conn) {
                 $this->maybeUpdateRDY($conn);
             }
+        } catch (\Throwable $t) {
+            sys_echo("nsq({$conn->getAddr()}) reconnectToNSQD exception: {$t->getMessage()}");
         } catch (\Exception $ex) {
             sys_echo("nsq({$conn->getAddr()}) reconnectToNSQD exception: {$ex->getMessage()}");
         }
@@ -643,6 +650,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
     {
         try {
             $conn->tryClose();
+        } catch (\Throwable $t) {
+            sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$t->getMessage()}");
         } catch (\Exception $ex) {
             sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$ex->getMessage()}");
         }

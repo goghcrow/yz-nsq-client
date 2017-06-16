@@ -28,7 +28,8 @@ class NsqConfig
     private static $lookup;
     private static $topic;
     private static $publishTimeout;
-    private static $disposableConnLifecycle;
+    private static $publishRetry;
+    // private static $disposableConnLifecycle;
     private static $messageAutoResponse;
 
     public static function init(array $config)
@@ -76,7 +77,8 @@ class NsqConfig
         static::$topic                      = Arr::get($config, "topic",                       []);
         static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    50);
         static::$publishTimeout             = Arr::get($config, "publish_timeout",             3 * 1000);
-        static::$disposableConnLifecycle    = Arr::get($config, "disposable_connection_lifecycle", 60 * 1000);
+        static::$publishRetry               = Arr::get($config, "publish_retry",               3);
+        // static::$disposableConnLifecycle    = Arr::get($config, "disposable_connection_lifecycle", 3 * 1000 + 100);
     }
 
     public static function getDelayingCloseTime()
@@ -169,9 +171,14 @@ class NsqConfig
         return static::$publishTimeout;
     }
 
+    public static function getPublishRetry()
+    {
+        return max(1, static::$publishRetry);
+    }
+
     public static function getDisposableConnLifecycle()
     {
-        return static::$disposableConnLifecycle;
+        return static::$publishTimeout + 100;
     }
 
     public static function getMessageAutoResponse()

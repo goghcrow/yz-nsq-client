@@ -19,14 +19,6 @@ class Binary implements Buffer
         }
     }
 
-    public function __destruct()
-    {
-        if (is_callable([$this->buffer, "__destruct"])) {
-            /** @noinspection PhpUndefinedMethodInspection */
-            $this->buffer->__destruct();
-        }
-    }
-
     public function __clone()
     {
         $this->buffer = clone $this->buffer;

@@ -105,21 +105,45 @@ class SQS
             yield Lock::unlock(__CLASS__);
         }
 
-
         $producer = InitializeSQS::$producers[$topic];
-        if (count($messages) === 1) {
-            $resp = (yield $producer->publish($messages[0]));
-        } else {
-            $resp = (yield $producer->multiPublish($messages));
+        $retry = NsqConfig::getPublishRetry();
+        yield self::publishWithRetry($producer, $topic, $messages, $retry);
+    }
+
+    private static function publishWithRetry(Producer $producer, $topic, $messages, $n = 3)
+    {
+        $resp = null;
+
+        try {
+            if (count($messages) === 1) {
+                $resp = (yield $producer->publish($messages[0]));
+            } else {
+                $resp = (yield $producer->multiPublish($messages));
+            }
+        } catch (\Throwable $ex) {
+        } catch (\Exception $ex) {
         }
+
         if ($resp === "OK") {
             yield true;
         } else {
-            throw new NsqException("publish fail", 0, null, [
-                "topic" => $topic,
-                "msg"   => $messages,
-                "resp"  => $resp,
-            ]);
+            if (--$n > 0) {
+                if ($resp === "E_BAD_TOPIC") {
+                    yield $producer->queryNSQLookupd();
+                }
+                $i = (3 - $n);
+                $msg = isset($ex) ? $ex->getMessage() : "";
+                sys_error("publish fail <$msg>, retry [topic=$topic, n=$i]");
+                yield taskSleep(100 * $i);
+                yield self::publishWithRetry($producer, $topic, $messages, $n);
+            } else {
+                $previous = isset($ex) ? $ex : null;
+                throw  new NsqException("publish [$topic] fail", 0, $previous, [
+                    "topic" => $topic,
+                    "msg"   => $messages,
+                    "resp"  => $resp,
+                ]);
+            }
         }
     }
 

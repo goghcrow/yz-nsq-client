@@ -17,7 +17,8 @@ class NopMsgDelegate implements MsgDelegate
 $id = substr(md5(__FILE__), 0, 16);
 $attempts = 4;
 $payload = "hello,  o(╯□╰)o";
-$bytes = Message::pack($id, 4, $payload);
+$bin = Message::pack($id, 4, $payload);
+$bytes = $bin->readFull();
 $msg = new Message($bytes, new NopMsgDelegate());
 assert($msg->getId() === $id);
 assert($msg->getAttempts() === $attempts);

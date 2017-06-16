@@ -15,7 +15,7 @@ class BenchMsgHandler2 implements MsgHandler
 
     public function handleMessage(Message $message, Consumer $consumer)
     {
-        yield taskSleep(100);
+        // yield taskSleep(100);
     }
 
     public function logFailedMessage(Message $message, Consumer $consumer)
@@ -25,7 +25,7 @@ class BenchMsgHandler2 implements MsgHandler
 }
 
 ini_set("memory_limit", "1024m");
-cli_set_process_title(__FILE__);
+// cli_set_process_title(__FILE__);
 
 $task = function()
 {
@@ -35,10 +35,10 @@ $task = function()
     $consumer = (yield SQS::subscribe($topic, $ch, new BenchMsgHandler2(), 1));
 };
 
-//swoole_timer_tick(1000, function() {
-//    print_r(SQS::stat());
-//    echo number_format(memory_get_usage()), "byte\n";
-//    echo number_format(memory_get_usage(true)), "byte\n";
-//});
+swoole_timer_tick(1000, function() {
+    print_r(SQS::stat());
+    echo number_format(memory_get_usage()), "byte\n";
+    echo number_format(memory_get_usage(true)), "byte\n";
+});
 
 Task::execute($task());
