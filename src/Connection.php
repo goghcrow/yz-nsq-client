@@ -470,7 +470,7 @@ class Connection implements Async
     {
         $errCode = $this->client->errCode;
         if ($errCode) {
-            $errMsg = swoole_strerror($errCode);
+            $errMsg = socket_strerror($errCode);
             $this->delegate->onIOError($this, new NsqException("nsqd({$this->host}:{$this->port}) IOError: $reason [errCode=$errCode, errMsg=$errMsg]"));
             $this->client->errCode = 0;
         } else {
