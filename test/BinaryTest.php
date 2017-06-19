@@ -37,4 +37,3 @@ assert($bin->readFloat() - 3.1415926 <= 0.0000001);
 assert($bin->readDouble() - 3.1415926 <= 0.0000001);
 assert($bin->read(strlen("Hello World!")) === "Hello World!");
 assert($bin->read(strlen("你好")) === "你好");
-// assert($bin->readableBytes() === 0);

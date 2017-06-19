@@ -52,7 +52,8 @@ class NopConnDelegate implements ConnDelegate
 
     public function onIOError(Connection $conn, \Exception $ex)
     {
-        sys_echo("nsq({$conn->getAddr()}) onIOError"); echo_exception($ex);
+        sys_echo("nsq({$conn->getAddr()}) onIOError");
+        echo_exception($ex);
     }
 
     public function onHeartbeat(Connection $conn)

@@ -15,11 +15,11 @@ $task = function() {
 
     // fail
     try {
-        yield Dns::lookup("xxx.yyy.xxx");
-        assert(false);
-    } catch (\Exception $ex) {
-        assert($ex);
-    }
+        $ip = yield Dns::lookup("xxx.yyy.xxx", 100);
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            assert(false);
+        }
+    } catch (\Exception $ex) { }
 
     swoole_event_exit();
 };

@@ -82,11 +82,13 @@ return [
     */
 
     // publish临时连接生命周期, 要大于消息处理时长
-    "disposable_connection_lifecycle" => 60 * 1000,
+    // "disposable_connection_lifecycle" => 1000,
 
     // 发布超时时间
-    "publish_timeout" => 3 * 1000,
+    "publish_timeout" => 1000, // 3 * 1000,
 
+    // 发布重试次数
+    "publish_retry" => 3,
 
 
     // =====================================  Consumer  =====================================

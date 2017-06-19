@@ -99,13 +99,6 @@ class Connection implements Async
         $this->createClient();
     }
 
-    public function __destruct()
-    {
-        foreach (get_class_vars(__CLASS__) as $prop => $_) {
-            unset($this->$prop);
-        }
-    }
-
     private function createClient()
     {
         $this->client = new SwooleClient(SWOOLE_TCP, SWOOLE_SOCK_ASYNC);
@@ -120,7 +113,7 @@ class Connection implements Async
         ]);
         $this->client->on("connect", $this->onConnect());
         $this->client->on("receive", [$this, "onIdentity"]); // Cannot destroy active lambda function
-        $this->client->on("error", $this->onError());
+        $this->client->on("error", $this->onClose(true));
         $this->client->on("close", $this->onClose());
     }
 
@@ -310,6 +303,8 @@ class Connection implements Async
                 Timer::clearAfterJob($this->getConnectTimeoutTimerId());
                 $this->write(Frame::MAGIC_V2);
                 $this->writeCmd(Command::identify());
+            } catch (\Throwable $t) {
+                $this->onIOError($t->getMessage());
             } catch (\Exception $ex) {
                 $this->onIOError($ex->getMessage());
             }
@@ -323,7 +318,11 @@ class Connection implements Async
             $this->delegate->onReceive($this, $bytes);
             $frame = new Frame($bytes);
             $this->confirmIdentity($frame);
+        } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
+        }
+
+        if (isset($ex)) {
             sys_echo("nsq({$this->host}:{$this->port}) identity fail, {$ex->getMessage()}");
             $this->onIOError($ex->getMessage());
         }
@@ -379,7 +378,11 @@ class Connection implements Async
             }
 
             Task::execute($this->dispatchFrame($frame));
+        } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
+        }
+
+        if (isset($ex)) {
             sys_echo("nsq({$this->host}:{$this->port}) recv or handle fail, {$ex->getMessage()}");
             echo_exception($ex);
             $this->onIOError($ex->getMessage());
@@ -390,7 +393,11 @@ class Connection implements Async
     {
         try {
             yield $this->doDispatchFrame($frame);
+        } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
+        }
+
+        if (isset($ex)) {
             sys_echo("nsq({$this->host}:{$this->port}) dispatchFrame exception: {$ex->getMessage()}");
             echo_exception($ex);
         }
@@ -424,32 +431,20 @@ class Connection implements Async
         }
     }
 
-    private function onError()
+    private function onClose($isError = false)
     {
-        /**
-         * swoole Client.c
-         * static int swClient_onError(swReactor *reactor, swEvent *event)
-         * {
-         *     if (cli->onError)
-         *     {
-         *          cli->onError(cli);
-         *     }
-         *     int ret = cli->close(cli);
-         * }
-         * onError 之后, swoole会主动触发onClose, 所以, reconnect 只在onClose中来做就可以了
-         */
-        return function(/*SwooleClient $client*/) {
-            $this->onIOError("swoole client onError");
-        };
-    }
-
-    private function onClose()
-    {
-        return function(/*SwooleClient $client*/) {
+        return function(/*SwooleClient $client*/) use($isError) {
             Timer::clearAfterJob($this->getConnectTimeoutTimerId());
+
+            if ($isError) {
+                $this->onIOError("swoole client onError");
+            }
+
             $this->isConnected = false;
             try {
                 $this->delegate->onClose($this);
+            } catch (\Throwable $t) {
+                sys_echo("nsq({$this->host}:{$this->port}) onClose exception: {$t->getMessage()}");
             } catch (\Exception $ex) {
                 sys_echo("nsq({$this->host}:{$this->port}) onClose exception: {$ex->getMessage()}");
             }
@@ -475,7 +470,7 @@ class Connection implements Async
     {
         $errCode = $this->client->errCode;
         if ($errCode) {
-            $errMsg = swoole_strerror($errCode);
+            $errMsg = socket_strerror($errCode);
             $this->delegate->onIOError($this, new NsqException("nsqd({$this->host}:{$this->port}) IOError: $reason [errCode=$errCode, errMsg=$errMsg]"));
             $this->client->errCode = 0;
         } else {
@@ -488,14 +483,21 @@ class Connection implements Async
         return $this->isWaitingClose || !isset($this->client) || !$this->client->isConnected();
     }
 
-    public function tryClose()
+    public function tryClose($force = false)
     {
         if ($this->isClosing()) {
             return false;
         }
 
+        if ($force) {
+            $this->immediatelyClose();
+            return true;
+        }
+
         try {
             $this->prepareClose();
+        } catch (\Throwable $t) {
+            sys_echo("nsq({$this->host}:{$this->port}) tryClose exception:  {$t->getMessage()}");
         } catch (\Exception $ex) {
             sys_echo("nsq({$this->host}:{$this->port}) tryClose exception:  {$ex->getMessage()}");
         }
@@ -546,6 +548,8 @@ class Connection implements Async
             // NOTE: there is no response
             $this->writeCmd(Command::nop());
             return true;
+        } catch (\Throwable $t) {
+            return false;
         } catch (\Exception $ex) {
             return false;
         }

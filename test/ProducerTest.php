@@ -32,7 +32,6 @@ $parallelTask = function() {
     yield parallel($tasks);
     swoole_timer_after(6000, function() {
         print_r(SQS::stat());
-        \TestUtils::objectsSummary();
     });
 };
 // Task::execute($parallelTask());
@@ -121,13 +120,7 @@ $parallelTask = function() {
     }
     $list = (yield parallel($tasks));
 
-    xdebug_break();
     print_r($list);
-
-    \TestUtils::objectsSummary();
-    Timer::after(6000, function() {
-       \TestUtils::objectsSummary();
-    });
 };
 
 Task::execute($parallelTask());

@@ -16,11 +16,6 @@ class ConnMsgDelegate implements MsgDelegate
         $this->conn = $conn;
     }
 
-    public function __destruct()
-    {
-        unset($this->conn);
-    }
-
     /**
      * OnFinish is called when the Finish() method
      * is triggered on the Message

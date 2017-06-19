@@ -15,11 +15,6 @@ class StringBuffer implements Buffer
         return $self;
     }
 
-    public function __destruct()
-    {
-        unset($this->bytes);
-    }
-
     public function __clone()
     {
         $this->bytes = "";

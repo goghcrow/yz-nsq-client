@@ -34,13 +34,6 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         ];
     }
 
-    public function __destruct()
-    {
-        foreach (get_class_vars(__CLASS__) as $prop => $_) {
-            unset($this->$prop);
-        }
-    }
-
     public function connectToNSQLookupds(array $addresses)
     {
         foreach ($addresses as $address) {
@@ -51,6 +44,11 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     public function connectToNSQLookupd($address)
     {
         yield $this->lookup->connectToNSQLookupd($address);
+    }
+
+    public function queryNSQLookupd()
+    {
+        yield $this->lookup->queryLookupd();
     }
 
     public function disconnectFromNSQLookupd($addr)
@@ -127,7 +125,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         $this->stats["messagesPublished"]++;
 
         $timeout = NsqConfig::getPublishTimeout();
-        $onTimeout = $this->onPublishTimeout(spl_object_hash($conn));
+        $onTimeout = $this->onPublishTimeout($conn);
         $timerId = $this->getPublishTimeoutTimerId($conn);
 
         Timer::after($timeout, $onTimeout, $timerId);
@@ -161,7 +159,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         $this->stats["messagesPublished"] += count($messages);
 
         $timeout = NsqConfig::getPublishTimeout();
-        $onTimeout = $this->onPublishTimeout(spl_object_hash($conn));
+        $onTimeout = $this->onPublishTimeout($conn);
         $timerId = $this->getPublishTimeoutTimerId($conn);
 
         Timer::after($timeout, $onTimeout, $timerId);
@@ -224,6 +222,8 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         try {
             $this->lookup->removeConnection($conn);
             $conn->tryClose();
+        } catch (\Throwable $ignore) {
+            sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$ex->getMessage()}");
         } catch (\Exception $ignore) {
             sys_echo("nsq({$conn->getAddr()}) onIOError exception: {$ex->getMessage()}");
         }
@@ -271,13 +271,16 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         }
     }
 
-    private function onPublishTimeout($connHash)
+    private function onPublishTimeout(Connection $conn)
     {
-        return function() use($connHash) {
+        return function() use($conn) {
+            $connHash = spl_object_hash($conn);
             if (isset($this->callbacks[$connHash])) {
                 $callback = $this->callbacks[$connHash];
                 call_user_func($callback, "TIME_OUT", new NsqException("publish timeout"));
                 unset($this->callbacks[$connHash]);
+
+                $conn->tryClose(true);
             }
         };
     }

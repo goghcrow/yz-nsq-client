@@ -42,11 +42,6 @@ class MemoryBuffer implements Buffer
         $this->writerIndex = 0;
     }
 
-    public function __destruct()
-    {
-        unset($this->buffer);
-    }
-
     public function __clone()
     {
         $this->reset();
