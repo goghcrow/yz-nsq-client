@@ -196,7 +196,7 @@ class Lookup
         }
 
         try {
-            $nsqdList = (yield static::lookupNsqdList($lookupdAddr, $this->topic));
+            $nsqdList = (yield $this->lookupNsqdList($lookupdAddr, $this->topic));
             foreach ($nsqdList as list($host, $port)) {
                 if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
                     $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
@@ -529,7 +529,7 @@ class Lookup
      * @param string $topic
      * @return \Generator
      */
-    public static function lookupNsqdList($addr, $topic)
+    private function lookupNsqdList($addr, $topic)
     {
         Command::checkTopicChannelName($topic);
 
