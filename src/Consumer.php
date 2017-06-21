@@ -72,7 +72,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->maxInFlight = NsqConfig::getMaxInFlightCount();
         $this->msgHandler = $msgHandler;
 
-        $this->lookup = new Lookup($this->topic);
+        $this->lookup = new Lookup($this->topic, Lookup::R, 1);
         $this->lookup->setNsqdDelegate($this);
 
         $this->stats = [

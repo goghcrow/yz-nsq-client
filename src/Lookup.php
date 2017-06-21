@@ -13,6 +13,11 @@ class Lookup
 {
     private $topic;
 
+    private $rw;
+    
+    const R = 'r';
+    const W = 'w';
+    
     private $isStopped = false;
 
     /**
@@ -52,12 +57,13 @@ class Lookup
      */
     private $lookupdHTTPAddrs = [];
     private $lookupdQueryIndex = 0; // for round-robin
+    
 
-
-    public function __construct($topic, $maxConnectionNum = 1)
+    public function __construct($topic, $rw, $maxConnectionNum = 1)
     {
         $this->topic = Command::checkTopicChannelName($topic);
         $this->maxConnectionNum = $maxConnectionNum;
+        $this->rw = $rw;
     }
 
     public function setNsqdDelegate(NsqdDelegate $delegate)
@@ -161,7 +167,7 @@ class Lookup
      */
     public function queryLookupd($lookupdAddr = null)
     {
-        $nsqdList = (yield $this->queryNSQDListWithRetry($lookupdAddr));
+        $nsqdList = (yield $this->queryNSQDListWithRetry($lookupdAddr, 3));
 
         foreach ($nsqdList as list($host, $port)) {
             try {
@@ -181,7 +187,7 @@ class Lookup
         }
     }
 
-    private function queryNSQDListWithRetry($lookupdAddr = null, $n = 3)
+    private function queryNSQDListWithRetry($lookupdAddr, $n = 3)
     {
         $nsqdList = [];
         $lookupdAddr = $lookupdAddr ?: $this->nextLookupdEndpoint();
@@ -533,7 +539,8 @@ class Lookup
 
         // $host = (yield Dns::lookup($host, 1000));
         $httpClient = new HttpClient($host, $port);
-        $resp = (yield $httpClient->get("/lookup", ["topic" => $topic], NsqConfig::getNsqlookupdConnectTimeout()));
+        $params = ["topic" => $topic, 'metainfo' => 'true', 'access' => $this->rw];
+        $resp = (yield $httpClient->get("/lookup", $params, NsqConfig::getNsqlookupdConnectTimeout()));
         $data = static::validLookupdResp($resp);
 
         $nsqdList = [];

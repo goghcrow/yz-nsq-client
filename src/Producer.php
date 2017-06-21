@@ -26,7 +26,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     public function __construct($topic, $maxConnectionNum = 1)
     {
         $this->topic = Command::checkTopicChannelName($topic);
-        $this->lookup = new Lookup($this->topic, $maxConnectionNum);
+        $this->lookup = new Lookup($this->topic, Lookup::W, $maxConnectionNum);
         $this->lookup->setNsqdDelegate($this);
 
         $this->stats = [
