@@ -167,7 +167,15 @@ class Lookup
      */
     public function queryLookupd($lookupdAddr = null)
     {
-        $nsqdList = (yield $this->queryNSQDListWithRetry($lookupdAddr, 3));
+        $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, 3));
+        $nsqdList = static::getNodeList($lookupResult);
+        foreach ($nsqdList as list($host, $port)) {
+            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
+                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
+            }
+        }
+        $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
+        $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
 
         foreach ($nsqdList as list($host, $port)) {
             try {
@@ -187,7 +195,7 @@ class Lookup
         }
     }
 
-    private function queryNSQDListWithRetry($lookupdAddr, $n = 3)
+    private function lookupWithRetry($lookupdAddr, $n = 3)
     {
         $nsqdList = [];
         $lookupdAddr = $lookupdAddr ?: $this->nextLookupdEndpoint();
@@ -196,14 +204,7 @@ class Lookup
         }
 
         try {
-            $nsqdList = (yield $this->lookupNsqdList($lookupdAddr, $this->topic));
-            foreach ($nsqdList as list($host, $port)) {
-                if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
-                    $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
-                }
-            }
-            $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
-            $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
+            $lookupResult = (yield $this->lookup($lookupdAddr, $this->topic));
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) { }
 
@@ -213,13 +214,22 @@ class Lookup
 
             if (--$n > 0) {
                 yield taskSleep(500);
-                yield $this->queryNSQDListWithRetry($lookupdAddr, $n);
+                yield $this->lookupWithRetry($lookupdAddr, $n);
             } else {
-                yield $nsqdList;
+                yield $lookupResult;
             }
         } else {
-            yield $nsqdList;
+            yield $lookupResult;
         }
+    }
+
+    private static function getNodeList($lookupResult) {
+        $nsqdList = [];
+        foreach ($lookupResult["producers"] as $producer)
+        {
+            $nsqdList[] = [$producer["broadcast_address"], $producer["tcp_port"]];
+        }
+        return $nsqdList;
     }
 
     /**
@@ -529,7 +539,7 @@ class Lookup
      * @param string $topic
      * @return \Generator
      */
-    private function lookupNsqdList($addr, $topic)
+    private function lookup($addr, $topic)
     {
         Command::checkTopicChannelName($topic);
 
@@ -541,15 +551,7 @@ class Lookup
         $httpClient = new HttpClient($host, $port);
         $params = ["topic" => $topic, 'metainfo' => 'true', 'access' => $this->rw];
         $resp = (yield $httpClient->get("/lookup", $params, NsqConfig::getNsqlookupdConnectTimeout()));
-        $data = static::validLookupdResp($resp);
-
-        $nsqdList = [];
-        foreach ($data["producers"] as $producer)
-        {
-            $nsqdList[] = [$producer["broadcast_address"], $producer["tcp_port"]];
-        }
-
-        yield $nsqdList;
+        yield static::validLookupdResp($resp);
     }
 
     private static function validLookupdResp(Response $resp)
