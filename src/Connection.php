@@ -7,6 +7,7 @@ use Zan\Framework\Components\Nsq\Contract\ConnDelegate;
 use Zan\Framework\Components\Nsq\Utils\Backoff;
 use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Foundation\Coroutine\Task;
+use Zan\Framework\Network\Common\DnsClient;
 use Zan\Framework\Network\Server\Timer\Timer;
 use Zan\Framework\Utilities\Types\Time;
 
@@ -153,6 +154,11 @@ class Connection implements Async
             return;
         }
         $timeout = NsqConfig::getNsqdConnectTimeout();
+
+        if (!filter_var($this->host, FILTER_VALIDATE_IP)) {
+            $dnsClient = new DnsClient();
+            $this->host = (yield $dnsClient->query($this->host));
+        }
         Timer::after($timeout, $this->onConnectTimeout(), $this->getConnectTimeoutTimerId());
         $this->client->connect($this->host, $this->port);
         yield $this;
