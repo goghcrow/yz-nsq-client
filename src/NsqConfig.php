@@ -75,7 +75,7 @@ class NsqConfig
         static::$maxAttempts                = Arr::get($config, "max_attempts",                5);
         static::$lookup                     = Arr::get($config, "lookup",                      []);
         static::$topic                      = Arr::get($config, "topic",                       []);
-        static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    50);
+        static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    4);
         static::$publishTimeout             = Arr::get($config, "publish_timeout",             3 * 1000);
         static::$publishRetry               = Arr::get($config, "publish_retry",               3);
         // static::$disposableConnLifecycle    = Arr::get($config, "disposable_connection_lifecycle", 3 * 1000 + 100);

@@ -20,6 +20,8 @@ class Lookup
     
     private $isStopped = false;
 
+    private $extendSupport = false;
+
     /**
      * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
@@ -182,16 +184,29 @@ class Lookup
     public function queryLookupd($lookupdAddr = null)
     {
         $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, 3));
+        if (isset($lookupResult['meta']['extend_support']) && $lookupResult['meta']['extend_support']) {
+            $this->extendSupport = true;
+        }
         $nsqdList = $this->getNodeList($lookupResult);
+        foreach ($nsqdList as list($host, $port)) {
+            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
+                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
+            }
+        }
         $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
 
+        yield $this->connectToNSQDList($nsqdList);
+    }
+
+    public function connectToNSQDList($nsqdList) {
         foreach ($nsqdList as list($host, $port)) {
             try {
                 /* @var Connection[] $conns */
                 $conns = (yield $this->connectToNSQD($host, $port));
                 foreach ($conns as $conn) {
-                    $conn->setLookupAddr($lookupdAddr);
+                    //$conn->setLookupAddr($lookupdAddr);
+                    $conn->setExtendSupport($this->extendSupport);
                     if ($this->delegate) {
                         $this->delegate->onConnect($conn);
                     }
@@ -368,11 +383,11 @@ class Lookup
         }
 
         $hash = spl_object_hash($conn);
-        $addr = $conn->getLookupAddr();
+        //$addr = $conn->getLookupAddr();
 
         $reconnect = isset($this->idleConnections[$hash]) || isset($this->busyConnections[$hash]);
-        $isQueryLookupd = isset($this->lookupdHTTPAddrs[$addr]) || ($addr === null && count($this->lookupdHTTPAddrs) > 0);
-
+        //$isQueryLookupd = isset($this->lookupdHTTPAddrs[$addr]) || ($addr === null && count($this->lookupdHTTPAddrs) > 0);
+        $isQueryLookupd = count($this->lookupdHTTPAddrs) > 0;
         if ($isQueryLookupd) {
             try {
                 // trigger a poll of the lookupd
