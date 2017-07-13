@@ -62,6 +62,9 @@ class Connection implements Async
 
     private $lastMsgTimestamp;
 
+    // partition id, -1 means server not supports partition
+    private $partitionId = -1;
+    
     /**
      * Disposable Connection
      * @param $host
@@ -99,6 +102,16 @@ class Connection implements Async
         $this->createClient();
     }
 
+    public function setPartition($id)
+    {
+        $this->partitionId = id;
+    }
+    
+    public function getPartition()
+    {
+        return $this->partitionId;
+    }
+    
     private function createClient()
     {
         $this->client = new SwooleClient(SWOOLE_TCP, SWOOLE_SOCK_ASYNC);

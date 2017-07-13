@@ -21,20 +21,34 @@ class Lookup
     private $isStopped = false;
 
     /**
+     * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
      */
     private $pendingConnections = [];
 
     /**
+     * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
      */
     private $idleConnections = [];
-
+    
     /**
+     * [ object_hash=>Connection ]
      * @var Connection[]
      */
     private $busyConnections = [];
 
+    /**
+     *
+     * e.g. [ 0 => [object_hash=>Connection,... ], ]
+     *    
+     */
+    private $partitionIdleConnections = [];
+    
+    private $nodes;
+    
+    private $partitionNode;
+    
     /**
      * connecting or connected
      * @var string[] map<string, int> [ "host:port" => conn_num, ]
@@ -168,12 +182,7 @@ class Lookup
     public function queryLookupd($lookupdAddr = null)
     {
         $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, 3));
-        $nsqdList = static::getNodeList($lookupResult);
-        foreach ($nsqdList as list($host, $port)) {
-            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
-                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
-            }
-        }
+        $nsqdList = $this->getNodeList($lookupResult);
         $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
 
@@ -223,13 +232,40 @@ class Lookup
         }
     }
 
-    private static function getNodeList($lookupResult) {
+    private function getNodeList($lookupResult) {
         $nsqdList = [];
-        foreach ($lookupResult["producers"] as $producer)
-        {
-            $nsqdList[] = [$producer["broadcast_address"], $producer["tcp_port"]];
+        $nodes = [];
+        $partitionNode = null;
+        foreach ($nsqdList as list($host, $port)) {
+            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
+                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
+            }
         }
-        return $nsqdList;
+        foreach ($lookupResult["producers"] as $producer) {
+            $ip = $producer["broadcast_address"];
+            $port = $producer["tcp_port"];
+            $key = "$ip:$port";
+            $nodes[$key] = [$ip, $port];
+            if (!isset($this->nsqdTCPAddrsConnNum[$key])) {
+                $this->nsqdTCPAddrsConnNum[$key] = 0;
+            }
+        }
+        if (isset($lookupResult["partitions"])) {
+            $partitionNode = [];
+            foreach ($lookupResult["partitions"] as $partition=>$producer) {
+                $ip = $producer["broadcast_address"];
+                $port = $producer["tcp_port"];
+                $key = "$ip:$port";
+                $nodes[$key] = [$ip, $port];
+                if (!isset($this->nsqdTCPAddrsConnNum[$key])) {
+                    $this->nsqdTCPAddrsConnNum[$key] = 0;
+                }
+                $partitionNode[$partition] = $key;
+            }
+        }
+        $this->nodes = $nodes;
+        $this->partitionNode = $partitionNode;
+        return $nodes;
     }
 
     /**

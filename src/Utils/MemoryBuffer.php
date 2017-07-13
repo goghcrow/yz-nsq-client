@@ -179,7 +179,7 @@ class MemoryBuffer implements Buffer
     }
 }
 
-/**
+/*
  * swoole_buffer的C实现不是很靠谱
  *
  * 1. buffer不是string, substr方法参数有问题, 容易用错

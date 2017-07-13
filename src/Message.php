@@ -37,6 +37,8 @@ class Message
 
     private $autoResponse = true;
 
+    private $partition = -1;
+
     /**
      * @var MsgDelegate
      */
@@ -65,6 +67,22 @@ class Message
     public function getId()
     {
         return $this->id;
+    }
+    
+    /**
+     * @return int
+     */
+    public function getPartition()
+    {
+        return $this->partition;
+    }
+    
+    /**
+     * @var int $partition
+     */
+    public function setPartition($partition)
+    {
+        $this->partition = $partition;
     }
 
     /**
