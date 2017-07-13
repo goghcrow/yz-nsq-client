@@ -26,9 +26,10 @@ class Command
      *  E_INVALID
      *  E_BAD_BODY
      */
-    public static function identify()
+    public static function identify($params = [])
     {
-        $payload = json_encode(NsqConfig::getIdentity(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $params = array_merge(NsqConfig::getIdentity(), $params);
+        $payload = json_encode($params, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         return "IDENTIFY \n" . pack('N', strlen($payload)) . $payload;
     }
 

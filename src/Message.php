@@ -17,6 +17,12 @@ class Message
     private $id;
 
     /**
+     * Message Tag
+     * @var string
+     */
+    private $tag;
+
+    /**
      * Message payload
      * @var string
      */
@@ -37,15 +43,18 @@ class Message
 
     private $autoResponse = true;
 
+    private $extendSupport;
+
     /**
      * @var MsgDelegate
      */
     private $delegate;
 
-    public function __construct($bytes, MsgDelegate $delegate)
+    public function __construct($bytes, MsgDelegate $delegate, $extendSupport = false)
     {
         $this->unpack($bytes);
         $this->delegate = $delegate;
+        $this->extendSupport = $extendSupport;
         $this->autoResponse = NsqConfig::getMessageAutoResponse();
     }
 
@@ -173,6 +182,17 @@ class Message
      *                         (uint16)
      *                          2-byte
      *                         attempts
+     *
+     *  With Extend Data:
+     *  [x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x][x]...[x][x][x][x]...
+     *  |       (int64)        ||    ||      (hex string encoded in ASCII)           || ||    ||  (binary)   || (binary)
+     *  |       8-byte         ||    ||                 16-byte                      || ||    ||             || N-byte
+     *  ----------------------------------------------------------------------------------------------------------------...
+     *    nanosecond timestamp    ^^                   message ID                      ^   ^^    extend data || message body
+     *                         (uint16)                                           1-byte   (uint16)
+     *                          2-bytes                                  extend data ver   2-bytes 
+     *                         attempts                                                    extend data length 
+ 
      */
     private function unpack($bytes)
     {
@@ -187,6 +207,16 @@ class Message
         $this->timestamp = $binary->readUInt64BE();
         $this->attempts = $binary->readUInt16BE();
         $this->id = $binary->read(16);
+        if ($this->extendSupport) {
+            $ver = $binary->readUInt8();
+            if ($ver > 0) {
+                $extLen = $binary->readUInt16BE();
+                $extData = $binary->read($extLen);
+                if ($ver == 2) {
+                    $this->tag = $extData;
+                }
+            }
+        }
         $this->body = $binary->readFull();
         ObjectPool::release($binary);
     }

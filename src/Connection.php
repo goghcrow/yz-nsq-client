@@ -62,6 +62,10 @@ class Connection implements Async
 
     private $lastMsgTimestamp;
 
+    private $extendSupport = false;
+
+    private $extraIdentifyParams = [];
+
     /**
      * Disposable Connection
      * @param $host
@@ -120,6 +124,11 @@ class Connection implements Async
     public function setDelegate(ConnDelegate $delegate)
     {
         $this->delegate = $delegate;
+    }
+
+    public function setExtendSupport($extendSupport)
+    {
+        $this->extendSupport = $extendSupport;
     }
 
     public function isDisposable()
@@ -299,16 +308,21 @@ class Connection implements Async
     {
         return function (/*SwooleClient $client*/) {
             $this->isConnected = true;
-            try {
-                Timer::clearAfterJob($this->getConnectTimeoutTimerId());
-                $this->write(Frame::MAGIC_V2);
-                $this->writeCmd(Command::identify());
-            } catch (\Throwable $t) {
-                $this->onIOError($t->getMessage());
-            } catch (\Exception $ex) {
-                $this->onIOError($ex->getMessage());
-            }
+            Timer::clearAfterJob($this->getConnectTimeoutTimerId());
+            $this->identity();
         };
+    }
+
+    public function identity()
+    {
+        try {
+            $this->write(Frame::MAGIC_V2);
+            $this->writeCmd(Command::identify($this->extraIdentifyParams));
+        } catch (\Throwable $t) {
+            $this->onIOError($t->getMessage());
+        } catch (\Exception $ex) {
+            $this->onIOError($ex->getMessage());
+        }
     }
 
     public function onIdentity(/** @noinspection PhpUnusedParameterInspection */
@@ -412,7 +426,7 @@ class Connection implements Async
 
             case Frame::FrameTypeMessage:
                 try {
-                    $msg = new Message($frame->getBody(), new ConnMsgDelegate($this));
+                    $msg = new Message($frame->getBody(), new ConnMsgDelegate($this), $this->extendSupport);
                     yield $this->delegate->onMessage($this, $msg);
                 } finally {
                     $this->rdyCount--;
