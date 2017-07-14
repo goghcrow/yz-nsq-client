@@ -339,7 +339,8 @@ class Lookup
                 }
                 if (isset($this->nodePartitions[$addr])) {
                     // TODO: specified partition
-                    $partition = array_rand($this->nodePartitions[$addr]);
+                    $pkey = array_rand($this->nodePartitions[$addr]);
+                    $partition = $this->nodePartitions[$addr][$pkey];
                     $conn->setPartition($partition);
                 }
                 $conn->setExtendSupport($this->extendSupport);
