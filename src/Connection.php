@@ -31,7 +31,7 @@ class Connection implements Async
 
     private $port;
 
-    private $lookupAddr;
+    //private $lookupAddr;
 
     private $isBusy = false;
 
@@ -281,18 +281,18 @@ class Connection implements Async
     /**
      * @return string|null
      */
-    public function getLookupAddr()
-    {
-        return $this->lookupAddr;
-    }
+    // public function getLookupAddr()
+    // {
+    //     return $this->lookupAddr;
+    // }
 
     /**
      * @param string $lookupAddr
      */
-    public function setLookupAddr($lookupAddr)
-    {
-        $this->lookupAddr = $lookupAddr;
-    }
+    // public function setLookupAddr($lookupAddr)
+    // {
+    //     $this->lookupAddr = $lookupAddr;
+    // }
 
     public function onMessageFinish(Message $msg)
     {

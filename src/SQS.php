@@ -13,11 +13,11 @@ class SQS
      * @param string $topic
      * @param string $channel
      * @param MsgHandler|callable $msgHandler
-     * @param int $maxInFlight
+     * @param array $options can contains 'maxInFlight' 'desiredTag'
      * @return \Generator yield return Consumer
      * @throws NsqException
      */
-    public static function subscribe($topic, $channel, $msgHandler, $maxInFlight = -1)
+    public static function subscribe($topic, $channel, $msgHandler, $options = [])
     {
         Command::checkTopicChannelName($topic);
         Command::checkTopicChannelName($channel);
@@ -31,9 +31,13 @@ class SQS
         }
 
         $consumer = new Consumer($topic, $channel, $msgHandler);
+        
+        $maxInFlight = isset($options['maxInFlight']) ? intval($options['maxInFlight']) : -1;
         $maxInFlight = $maxInFlight > 0 ? $maxInFlight : NsqConfig::getMaxInFlightCount();
         $consumer->changeMaxInFlight($maxInFlight ?: $maxInFlight);
 
+        $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : null;
+        
         $lookup = NsqConfig::getLookup();
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
