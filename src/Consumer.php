@@ -59,6 +59,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
     private $stats;
 
+    private $desiredTag = '';
+    
     /**
      * Consumer constructor.
      * @param $topic
@@ -84,14 +86,9 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->bootRedistributeRDYTick();
     }
 
-    /**
-     * @param $address
-     * @return \Generator Consumer
-     */
-    public function connectToNSQLookupd($address)
+    public function setDesiredTag($tag)
     {
-        yield $this->lookup->connectToNSQLookupd($address);
-        yield $this;
+        $this->desiredTag = $tag;
     }
 
     /**
@@ -100,8 +97,13 @@ class Consumer implements ConnDelegate, NsqdDelegate
      */
     public function connectToNSQLookupds(array $addresses)
     {
+        $params = [];
+        if (!empty($this->desiredTag)) {
+            $params['desired_tag'] = $this->desiredTag;
+            $this->lookup->setExtraIdentifyParams($params);
+        }
         foreach ($addresses as $address) {
-            yield $this->connectToNSQLookupd($address);
+            yield $this->lookup->connectToNSQLookupd($address);
         }
         yield $this;
     }

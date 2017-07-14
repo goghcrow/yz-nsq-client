@@ -116,12 +116,19 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function publish($message)
+    public function publish($message, $params = [])
     {
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
-
-        $conn->writeCmd(Command::publish($this->topic, $message));
+        $partitionId = $conn->getPartition();
+        $pubParams = [];
+        if ($partitionId >= 0) {
+            $params[]= strval($partitionId);
+            if (!empty($params['tag'])) {
+                $pubParams[]= $params['tag'];
+            }
+        }
+        $conn->writeCmd(Command::publish($this->topic, $message, $pubParams));
         $this->stats["messagesPublished"]++;
 
         $timeout = NsqConfig::getPublishTimeout();

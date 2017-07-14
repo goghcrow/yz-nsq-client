@@ -28,9 +28,9 @@ class Command
      */
     public static function identify($params = [])
     {
-        $params = array_merge(NsqConfig::getIdentity(), $params);
+        $params = array_merge(NsqConfig::getIdentify(), $params);
         $payload = json_encode($params, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        return "IDENTIFY \n" . pack('N', strlen($payload)) . $payload;
+        return static::cmdWithBody("IDENTIFY", $payload);
     }
 
     /**
@@ -42,7 +42,7 @@ class Command
      * @return string
      *
      * Success Response:
-     *  A JSON payload describing the authorized client’s identity,
+     *  A JSON payload describing the authorized client’s ,
      *  an optional URL and a count of permissions which were authorized.
      *  {"identity":"...", "identity_url":"...", "permission_count":1}
      * Error Responses:
@@ -51,7 +51,7 @@ class Command
      */
     public static function auth($secret)
     {
-        return "AUTH\n" . pack('N', strlen($secret)) . $secret;
+        return static::cmdWithBody("AUTH", $secret);
     }
 
     /**
@@ -65,9 +65,9 @@ class Command
     public static function register($topic, $channel = null)
     {
         if ($channel) {
-            return "REGISTER $topic $channel\n";
+            return static::cmd("REGISTER", [$topic, $channel]);
         } else {
-            return "REGISTER $topic\n";
+            return static::cmd("REGISTER", [$topic]);
         }
     }
 
@@ -82,9 +82,9 @@ class Command
     public static function unRegister($topic, $channel = null)
     {
         if ($channel) {
-            return "UNREGISTER $topic $channel\n";
+            return static::cmd("UNREGISTER", [$topic, $channel]);
         } else {
-            return "UNREGISTER $topic\n";
+            return static::cmd("UNREGISTER", [$topic]);
         }
     }
 
@@ -97,7 +97,7 @@ class Command
      */
     public static function ping()
     {
-        return "PING\n";
+        return static::cmd("PING");
     }
 
     /**
@@ -116,7 +116,7 @@ class Command
      */
     public static function subscribe($topic, $channel)
     {
-        return "SUB $topic $channel\n";
+        return static::cmd("SUB", [$topic, $channel]);
     }
 
     /**
@@ -134,9 +134,9 @@ class Command
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public static function publish($topic, $body)
+    public static function publish($topic, $body, $params = [])
     {
-        return "PUB $topic\n" . pack('N', strlen($body)) . $body;
+        return static::cmdWithBody("PUB", $body, array_merge([$topic], $params));
     }
 
     /**
@@ -171,16 +171,15 @@ class Command
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public static function multiPublish($topic, array $messages)
+    public static function multiPublish($topic, array $messages, $params = [])
     {
         $body = "";
         foreach ($messages as $message) {
             $body .= pack('N', strlen($message)) . $message;
         }
         $msgNum = pack('N', count($messages));
-        $bodySize = pack('N', strlen($msgNum . $body));
-
-        return "MPUB $topic\n" . $bodySize . $msgNum . $body;
+        $body = $msgNum . $body;
+        return static::cmdWithBody("MPUB", $body, array_merge([$topic], $params));
     }
 
 
@@ -196,7 +195,7 @@ class Command
      */
     public static function ready($count)
     {
-        return "RDY $count\n";
+        return static::cmd("RDY", [$count]);
     }
 
     /**
@@ -212,7 +211,7 @@ class Command
      */
     public static function finish(Message $msg)
     {
-        return "FIN {$msg->getId()}\n";
+        return static::cmd("FIN", [$msg->getId()]);
     }
 
     /**
@@ -231,7 +230,7 @@ class Command
      */
     public static function requeue(Message $msg, $delay = 0)
     {
-        return "REQ {$msg->getId()} $delay\n";
+        return static::cmd("REQ", [$msg->getId(), $delay]);
     }
 
     /**
@@ -247,7 +246,7 @@ class Command
      */
     public static function touch(Message $msg)
     {
-        return "TOUCH {$msg->getId()}\n";
+        return static::cmd("TOUCH", [$msg->getId()]);
     }
 
     /**
@@ -267,7 +266,7 @@ class Command
      */
     public static function startClose()
     {
-        return "CLS\n";
+        return static::cmd("CLS");
     }
 
     /**
@@ -280,7 +279,7 @@ class Command
      */
     public static function nop()
     {
-        return "NOP\n";
+        return static::cmd("NOP");
     }
 
     /**
@@ -296,5 +295,21 @@ class Command
             throw new NsqException("Invalid topic or channel name $name");
         }
         return $name;
+    }
+    
+    public static function cmd($cmd, $args = [])
+    {
+        $ret = $cmd;
+        if (!empty($args)) {
+            $ret .= ' ' . implode(' ', $args) . "\n";
+        }
+        return ret;
+    }
+    
+    public static function cmdWithBody($cmd, $body, $args = [])
+    {
+        $ret = static::cmd($cmd, $args);
+        $ret += pack('N', strlen($body)) . $body;
+        return $ret;
     }
 }

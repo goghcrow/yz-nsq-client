@@ -22,6 +22,8 @@ class Lookup
 
     private $extendSupport = false;
 
+    private $extraIdentifyParams = [];
+    
     /**
      * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
@@ -49,6 +51,8 @@ class Lookup
     
     private $nodes;
     
+    private $nodePartitions;
+    
     private $partitionNode;
     
     /**
@@ -73,7 +77,7 @@ class Lookup
      */
     private $lookupdHTTPAddrs = [];
     private $lookupdQueryIndex = 0; // for round-robin
-    
+    private $lookupRetries = 3;
 
     public function __construct($topic, $rw, $maxConnectionNum = 1)
     {
@@ -85,6 +89,11 @@ class Lookup
     public function setNsqdDelegate(NsqdDelegate $delegate)
     {
         $this->delegate = $delegate;
+    }
+
+    public function setExtraIdentifyParams($params)
+    {
+        $this->extraIdentifyParams = $params;
     }
 
     /**
@@ -113,7 +122,7 @@ class Lookup
         if (count($this->lookupdHTTPAddrs) === 1) {
             // reconnecting will be triggered on connection close,
             // so no need to check number of connections in tick timer
-            $this->lookupdPollingTick();
+            $this->startLookupdPollingTick();
         }
     }
 
@@ -121,7 +130,7 @@ class Lookup
      * an Tick Timer to discover nsqd producers for the configured topic.
      * @return void
      */
-    private function lookupdPollingTick()
+    private function startLookupdPollingTick()
     {
         // add some jitter
         $jitter = (float)rand() / (float)getrandmax()
@@ -183,7 +192,7 @@ class Lookup
      */
     public function queryLookupd($lookupdAddr = null)
     {
-        $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, 3));
+        $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, $this->lookupRetries));
         if (isset($lookupResult['meta']['extend_support']) && $lookupResult['meta']['extend_support']) {
             $this->extendSupport = true;
         }
@@ -191,6 +200,11 @@ class Lookup
         yield $this->connectToNSQDList($nsqdList);
     }
     
+     /**
+     * initiate connections to any new producers that are identified.
+     * @param array $nsqdList
+     * @return \Generator
+     */
     public function connectToNSQDList($nsqdList) {
         foreach ($nsqdList as list($host, $port)) {
             if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
@@ -205,7 +219,6 @@ class Lookup
                 $conns = (yield $this->connectToNSQD($host, $port));
                 foreach ($conns as $conn) {
                     //$conn->setLookupAddr($lookupdAddr);
-                    $conn->setExtendSupport($this->extendSupport);
                     if ($this->delegate) {
                         $this->delegate->onConnect($conn);
                     }
@@ -250,6 +263,8 @@ class Lookup
         $nsqdList = [];
         $nodes = [];
         $partitionNode = null;
+        $nodePartitions = null;
+        
         foreach ($nsqdList as list($host, $port)) {
             if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
                 $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
@@ -266,6 +281,7 @@ class Lookup
         }
         if (isset($lookupResult["partitions"])) {
             $partitionNode = [];
+            $nodePartitions = [];
             foreach ($lookupResult["partitions"] as $partition=>$producer) {
                 $ip = $producer["broadcast_address"];
                 $port = $producer["tcp_port"];
@@ -275,9 +291,12 @@ class Lookup
                     $this->nsqdTCPAddrsConnNum[$key] = 0;
                 }
                 $partitionNode[$partition] = $key;
+                if (!isset($nodePartitions[$key])) {
+                    $nodePartitions[$key] = [];
+                }
+                $nodePartitions[$key][]= $partition;
             }
         }
-        $this->nodes = $nodes;
         $this->partitionNode = $partitionNode;
         return $nodes;
     }
@@ -312,10 +331,19 @@ class Lookup
         for ($i = 0; $i < $remainNum; $i++) {
             try {
                 $this->nsqdTCPAddrsConnNum[$addr]++;
-
+                
                 $conn = new Connection($host, $port);
+                if ($this->rw = self::R) {
+                    $conn->setExtraIdentifyParams($this->extraIdentifyParams);
+                }
+                if (isset($this->nodePartitions[$addr])) {
+                    // TODO: specified partition
+                    $partition = array_rand($this->nodePartitions[$addr]);
+                }
+                $conn->setExtendSupport($this->extendSupport);
+                
                 $hash = spl_object_hash($conn);
-
+                
                 try {
                     $this->pendingConnections[$hash] = $conn;
                     yield $conn->connect();

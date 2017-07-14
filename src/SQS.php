@@ -36,7 +36,8 @@ class SQS
         $maxInFlight = $maxInFlight > 0 ? $maxInFlight : NsqConfig::getMaxInFlightCount();
         $consumer->changeMaxInFlight($maxInFlight ?: $maxInFlight);
 
-        $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : null;
+        $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : '';
+        $consumer->setDesiredTag($desiredTag);
         
         $lookup = NsqConfig::getLookup();
         if (empty($lookup)) {
@@ -48,11 +49,10 @@ class SQS
         }
         InitializeSQS::$consumers["$topic:$channel"][] = $consumer;
 
-        if (is_array($lookup)) {
-            yield $consumer->connectToNSQLookupds($lookup);
-        } else {
-            yield $consumer->connectToNSQLookupd($lookup);
+        if (!is_array($lookup)) {
+            $lookup = [$lookup];
         }
+        yield $consumer->connectToNSQLookupds($lookup);
     }
 
     /**

@@ -59,7 +59,7 @@ class NsqConfig
             "jitter" => 0.3 // 0~1
         ];
 
-        static::$identify                   = Arr::get($config, "identity", [])                + $idInfoDefault;
+        static::$identify                   = Arr::get($config, "identify", [])                + $idInfoDefault;
         static::$messageBackoff             = Arr::get($config, "message_backoff", [])         + $backoffDefault;
         static::$messageAutoResponse        = Arr::get($config, "message_auto_response",       true);
         static::$nsqlookupdConnectTimeout   = Arr::get($config, "nsqlookupd_connect_timeout",  3 * 1000);
@@ -96,14 +96,14 @@ class NsqConfig
         return static::$nsqlookupdConnectTimeout;
     }
 
-    public static function getIdentity()
+    public static function getIdentify()
     {
         return static::$identify;
     }
 
-    public static function negotiateIdentity($identity)
+    public static function negotiateIdentify($identify)
     {
-        static::$identify = array_merge(static::$identify, $identity);
+        static::$identify = array_merge(static::$identify, $identify);
     }
 
     public static function getMaxInFlightCount()
