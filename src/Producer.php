@@ -123,7 +123,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         $partitionId = $conn->getPartition();
         $pubParams = [];
         if ($partitionId >= 0) {
-            $params[]= strval($partitionId);
+            $pubParams[]= strval($partitionId);
             if (!empty($params['tag'])) {
                 $pubParams[]= $params['tag'];
             }

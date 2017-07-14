@@ -108,7 +108,7 @@ class Connection implements Async
 
     public function setPartition($id)
     {
-        $this->partitionId = id;
+        $this->partitionId = $id;
     }
     
     public function getPartition()

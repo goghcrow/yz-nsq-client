@@ -54,10 +54,10 @@ class Message
 
     public function __construct($bytes, MsgDelegate $delegate, $extendSupport = false)
     {
-        $this->unpack($bytes);
-        $this->delegate = $delegate;
         $this->extendSupport = $extendSupport;
+        $this->delegate = $delegate;
         $this->autoResponse = NsqConfig::getMessageAutoResponse();
+        $this->unpack($bytes);
     }
 
     public function __clone()
@@ -100,6 +100,11 @@ class Message
     public function getBody()
     {
         return $this->body;
+    }
+
+    public function getTag()
+    {
+        return $this->tag;
     }
 
     /**

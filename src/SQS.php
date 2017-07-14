@@ -79,7 +79,7 @@ class SQS
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, ...$messages)
+    public static function publish($topic, $params, ...$messages)
     {
         Command::checkTopicChannelName($topic);
 
@@ -111,18 +111,18 @@ class SQS
 
         $producer = InitializeSQS::$producers[$topic];
         $retry = NsqConfig::getPublishRetry();
-        yield self::publishWithRetry($producer, $topic, $messages, $retry);
+        yield self::publishWithRetry($producer, $topic, $messages, $params, $retry);
     }
 
-    private static function publishWithRetry(Producer $producer, $topic, $messages, $n = 3)
+    private static function publishWithRetry(Producer $producer, $topic, $messages, $params, $n = 3)
     {
         $resp = null;
 
         try {
             if (count($messages) === 1) {
-                $resp = (yield $producer->publish($messages[0]));
+                $resp = (yield $producer->publish($messages[0], $params));
             } else {
-                $resp = (yield $producer->multiPublish($messages));
+                $resp = (yield $producer->multiPublish($messages, $params));
             }
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) {

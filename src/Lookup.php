@@ -298,6 +298,7 @@ class Lookup
             }
         }
         $this->partitionNode = $partitionNode;
+        $this->nodePartitions = $nodePartitions;
         return $nodes;
     }
 
@@ -339,9 +340,9 @@ class Lookup
                 if (isset($this->nodePartitions[$addr])) {
                     // TODO: specified partition
                     $partition = array_rand($this->nodePartitions[$addr]);
+                    $conn->setPartition($partition);
                 }
                 $conn->setExtendSupport($this->extendSupport);
-                
                 $hash = spl_object_hash($conn);
                 
                 try {

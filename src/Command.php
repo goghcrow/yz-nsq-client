@@ -301,15 +301,15 @@ class Command
     {
         $ret = $cmd;
         if (!empty($args)) {
-            $ret .= ' ' . implode(' ', $args) . "\n";
+            $ret .= ' ' . implode(' ', $args);
         }
-        return ret;
+        return $ret . "\n";
     }
     
     public static function cmdWithBody($cmd, $body, $args = [])
     {
         $ret = static::cmd($cmd, $args);
-        $ret += pack('N', strlen($body)) . $body;
+        $ret .= pack('N', strlen($body)) . $body;
         return $ret;
     }
 }
