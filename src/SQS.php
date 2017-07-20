@@ -79,7 +79,7 @@ class SQS
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, $params, ...$messages)
+    public static function publish($topic, $messages, $params)
     {
         Command::checkTopicChannelName($topic);
 
@@ -87,11 +87,10 @@ class SQS
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
         }
-
+        $messages = (array) $messages;
         if (empty($messages)) {
             throw new NsqException("empty messages");
         }
-
         foreach ($messages as $i => $message) {
             if (is_scalar($message)) {
                 $messages[$i] = /*strval(*/$message/*)*/;
