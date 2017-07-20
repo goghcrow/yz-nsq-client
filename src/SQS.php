@@ -76,6 +76,7 @@ class SQS
     /**
      * @param string $topic
      * @param string[] ...$messages
+     * @param array $params
      * @return \Generator yield bool
      * @throws NsqException
      */
