@@ -59,7 +59,7 @@ class NsqConfig
             "jitter" => 0.3 // 0~1
         ];
 
-        static::$identify                   = Arr::get($config, "identity", [])                + $idInfoDefault;
+        static::$identify                   = Arr::get($config, "identify", [])                + $idInfoDefault;
         static::$messageBackoff             = Arr::get($config, "message_backoff", [])         + $backoffDefault;
         static::$messageAutoResponse        = Arr::get($config, "message_auto_response",       true);
         static::$nsqlookupdConnectTimeout   = Arr::get($config, "nsqlookupd_connect_timeout",  3 * 1000);
@@ -75,7 +75,7 @@ class NsqConfig
         static::$maxAttempts                = Arr::get($config, "max_attempts",                5);
         static::$lookup                     = Arr::get($config, "lookup",                      []);
         static::$topic                      = Arr::get($config, "topic",                       []);
-        static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    50);
+        static::$maxConnectionPerTopic      = Arr::get($config, "max_connection_per_topic",    4);
         static::$publishTimeout             = Arr::get($config, "publish_timeout",             3 * 1000);
         static::$publishRetry               = Arr::get($config, "publish_retry",               3);
         // static::$disposableConnLifecycle    = Arr::get($config, "disposable_connection_lifecycle", 3 * 1000 + 100);
@@ -96,14 +96,14 @@ class NsqConfig
         return static::$nsqlookupdConnectTimeout;
     }
 
-    public static function getIdentity()
+    public static function getIdentify()
     {
         return static::$identify;
     }
 
-    public static function negotiateIdentity($identity)
+    public static function negotiateIdentify($identify)
     {
-        static::$identify = array_merge(static::$identify, $identity);
+        static::$identify = array_merge(static::$identify, $identify);
     }
 
     public static function getMaxInFlightCount()
