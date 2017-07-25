@@ -197,6 +197,7 @@ class Lookup
             $this->extendSupport = true;
         }
         $nsqdList = $this->getNodeList($lookupResult);
+        $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         yield $this->connectToNSQDList($nsqdList);
     }
     
@@ -211,7 +212,6 @@ class Lookup
                 $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
             }
         }
-        $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
         foreach ($nsqdList as list($host, $port)) {
             try {
@@ -334,7 +334,7 @@ class Lookup
                 $this->nsqdTCPAddrsConnNum[$addr]++;
                 
                 $conn = new Connection($host, $port);
-                if ($this->rw = self::R) {
+                if ($this->rw == self::R) {
                     $conn->setExtraIdentifyParams($this->extraIdentifyParams);
                 }
                 if (isset($this->nodePartitions[$addr])) {
