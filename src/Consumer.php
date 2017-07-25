@@ -59,8 +59,6 @@ class Consumer implements ConnDelegate, NsqdDelegate
 
     private $stats;
 
-    private $desiredTag = '';
-    
     /**
      * Consumer constructor.
      * @param $topic
@@ -74,7 +72,7 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->maxInFlight = NsqConfig::getMaxInFlightCount();
         $this->msgHandler = $msgHandler;
 
-        $this->lookup = new Lookup($this->topic, Lookup::R, 1);
+        $this->lookup = new Lookup($this->topic);
         $this->lookup->setNsqdDelegate($this);
 
         $this->stats = [
@@ -86,9 +84,14 @@ class Consumer implements ConnDelegate, NsqdDelegate
         $this->bootRedistributeRDYTick();
     }
 
-    public function setDesiredTag($tag)
+    /**
+     * @param $address
+     * @return \Generator Consumer
+     */
+    public function connectToNSQLookupd($address)
     {
-        $this->desiredTag = $tag;
+        yield $this->lookup->connectToNSQLookupd($address);
+        yield $this;
     }
 
     /**
@@ -97,13 +100,8 @@ class Consumer implements ConnDelegate, NsqdDelegate
      */
     public function connectToNSQLookupds(array $addresses)
     {
-        $params = [];
-        if (!empty($this->desiredTag)) {
-            $params['desired_tag'] = $this->desiredTag;
-            $this->lookup->setExtraIdentifyParams($params);
-        }
         foreach ($addresses as $address) {
-            yield $this->lookup->connectToNSQLookupd($address);
+            yield $this->connectToNSQLookupd($address);
         }
         yield $this;
     }

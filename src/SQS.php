@@ -13,11 +13,11 @@ class SQS
      * @param string $topic
      * @param string $channel
      * @param MsgHandler|callable $msgHandler
-     * @param array $options can contains 'maxInFlight' 'desiredTag'
+     * @param int $maxInFlight
      * @return \Generator yield return Consumer
      * @throws NsqException
      */
-    public static function subscribe($topic, $channel, $msgHandler, $options = [])
+    public static function subscribe($topic, $channel, $msgHandler, $maxInFlight = -1)
     {
         Command::checkTopicChannelName($topic);
         Command::checkTopicChannelName($channel);
@@ -31,14 +31,9 @@ class SQS
         }
 
         $consumer = new Consumer($topic, $channel, $msgHandler);
-        
-        $maxInFlight = isset($options['maxInFlight']) ? intval($options['maxInFlight']) : -1;
         $maxInFlight = $maxInFlight > 0 ? $maxInFlight : NsqConfig::getMaxInFlightCount();
         $consumer->changeMaxInFlight($maxInFlight ?: $maxInFlight);
 
-        $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : '';
-        $consumer->setDesiredTag($desiredTag);
-        
         $lookup = NsqConfig::getLookup();
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
@@ -49,10 +44,11 @@ class SQS
         }
         InitializeSQS::$consumers["$topic:$channel"][] = $consumer;
 
-        if (!is_array($lookup)) {
-            $lookup = [$lookup];
+        if (is_array($lookup)) {
+            yield $consumer->connectToNSQLookupds($lookup);
+        } else {
+            yield $consumer->connectToNSQLookupd($lookup);
         }
-        yield $consumer->connectToNSQLookupds($lookup);
     }
 
     /**
@@ -76,11 +72,10 @@ class SQS
     /**
      * @param string $topic
      * @param string[] ...$messages
-     * @param array $params
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, $messages, $params)
+    public static function publish($topic, ...$messages)
     {
         Command::checkTopicChannelName($topic);
 
@@ -88,10 +83,11 @@ class SQS
         if (empty($lookup)) {
             throw new NsqException("no nsq lookup address");
         }
-        $messages = (array) $messages;
+
         if (empty($messages)) {
             throw new NsqException("empty messages");
         }
+
         foreach ($messages as $i => $message) {
             if (is_scalar($message)) {
                 $messages[$i] = /*strval(*/$message/*)*/;
@@ -111,18 +107,18 @@ class SQS
 
         $producer = InitializeSQS::$producers[$topic];
         $retry = NsqConfig::getPublishRetry();
-        yield self::publishWithRetry($producer, $topic, $messages, $params, $retry);
+        yield self::publishWithRetry($producer, $topic, $messages, $retry);
     }
 
-    private static function publishWithRetry(Producer $producer, $topic, $messages, $params, $n = 3)
+    private static function publishWithRetry(Producer $producer, $topic, $messages, $n = 3)
     {
         $resp = null;
 
         try {
             if (count($messages) === 1) {
-                $resp = (yield $producer->publish($messages[0], $params));
+                $resp = (yield $producer->publish($messages[0]));
             } else {
-                $resp = (yield $producer->multiPublish($messages, $params));
+                $resp = (yield $producer->multiPublish($messages));
             }
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) {

@@ -15,7 +15,7 @@ $task = function() {
 
     // fail
     try {
-        $ip = (yield Dns::lookup("xxx.yyy.xxx", 100));
+        $ip = yield Dns::lookup("xxx.yyy.xxx", 100);
         if (filter_var($ip, FILTER_VALIDATE_IP)) {
             assert(false);
         }
