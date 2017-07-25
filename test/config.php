@@ -19,7 +19,7 @@ return [
 
     // ====================================== 以下选择性配置 ====================================
     // ======================================  identity  ======================================
-    "identify" => [
+    "identity" => [
         // Identifiers sent to nsqd representing this client
         "client_id" => gethostname(),
 
@@ -45,7 +45,7 @@ return [
         "deflate_level" => 1,
         "sample_rate" => 0,
 
-        "user_agent" => "zan-nsq-client/v0.2",
+        "user_agent" => "zan-nsq-client/v0.1",
 
         // 服务端消息超时时间
         // The server-side message timeout for messages delivered to this client

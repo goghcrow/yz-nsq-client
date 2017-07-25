@@ -13,48 +13,23 @@ class Lookup
 {
     private $topic;
 
-    private $rw;
-    
-    const R = 'r';
-    const W = 'w';
-    
     private $isStopped = false;
 
-    private $extendSupport = false;
-
-    private $extraIdentifyParams = [];
-    
     /**
-     * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
      */
     private $pendingConnections = [];
 
     /**
-     * [ object_hash=>Connection ]
      * @var Connection[] map<string, Connection>
      */
     private $idleConnections = [];
-    
+
     /**
-     * [ object_hash=>Connection ]
      * @var Connection[]
      */
     private $busyConnections = [];
 
-    /**
-     *
-     * e.g. [ 0 => [object_hash=>Connection,... ], ]
-     *    
-     */
-    private $partitionIdleConnections = [];
-    
-    private $nodes;
-    
-    private $nodePartitions;
-    
-    private $partitionNode;
-    
     /**
      * connecting or connected
      * @var string[] map<string, int> [ "host:port" => conn_num, ]
@@ -77,23 +52,17 @@ class Lookup
      */
     private $lookupdHTTPAddrs = [];
     private $lookupdQueryIndex = 0; // for round-robin
-    private $lookupRetries = 3;
 
-    public function __construct($topic, $rw, $maxConnectionNum = 1)
+
+    public function __construct($topic, $maxConnectionNum = 1)
     {
         $this->topic = Command::checkTopicChannelName($topic);
         $this->maxConnectionNum = $maxConnectionNum;
-        $this->rw = $rw;
     }
 
     public function setNsqdDelegate(NsqdDelegate $delegate)
     {
         $this->delegate = $delegate;
-    }
-
-    public function setExtraIdentifyParams($params)
-    {
-        $this->extraIdentifyParams = $params;
     }
 
     /**
@@ -122,7 +91,7 @@ class Lookup
         if (count($this->lookupdHTTPAddrs) === 1) {
             // reconnecting will be triggered on connection close,
             // so no need to check number of connections in tick timer
-            $this->startLookupdPollingTick();
+            $this->lookupdPollingTick();
         }
     }
 
@@ -130,7 +99,7 @@ class Lookup
      * an Tick Timer to discover nsqd producers for the configured topic.
      * @return void
      */
-    private function startLookupdPollingTick()
+    private function lookupdPollingTick()
     {
         // add some jitter
         $jitter = (float)rand() / (float)getrandmax()
@@ -192,33 +161,14 @@ class Lookup
      */
     public function queryLookupd($lookupdAddr = null)
     {
-        $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, $this->lookupRetries));
-        if (isset($lookupResult['meta']['extend_support']) && $lookupResult['meta']['extend_support']) {
-            $this->extendSupport = true;
-        }
-        $nsqdList = $this->getNodeList($lookupResult);
-        yield $this->connectToNSQDList($nsqdList);
-    }
-    
-     /**
-     * initiate connections to any new producers that are identified.
-     * @param array $nsqdList
-     * @return \Generator
-     */
-    public function connectToNSQDList($nsqdList) {
-        foreach ($nsqdList as list($host, $port)) {
-            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
-                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
-            }
-        }
-        $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
-        $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
+        $nsqdList = (yield $this->queryNSQDListWithRetry($lookupdAddr));
+
         foreach ($nsqdList as list($host, $port)) {
             try {
                 /* @var Connection[] $conns */
                 $conns = (yield $this->connectToNSQD($host, $port));
                 foreach ($conns as $conn) {
-                    //$conn->setLookupAddr($lookupdAddr);
+                    $conn->setLookupAddr($lookupdAddr);
                     if ($this->delegate) {
                         $this->delegate->onConnect($conn);
                     }
@@ -231,7 +181,7 @@ class Lookup
         }
     }
 
-    private function lookupWithRetry($lookupdAddr, $n = 3)
+    private function queryNSQDListWithRetry($lookupdAddr = null, $n = 3)
     {
         $nsqdList = [];
         $lookupdAddr = $lookupdAddr ?: $this->nextLookupdEndpoint();
@@ -240,7 +190,14 @@ class Lookup
         }
 
         try {
-            $lookupResult = (yield $this->lookup($lookupdAddr, $this->topic));
+            $nsqdList = (yield static::lookupNsqdList($lookupdAddr, $this->topic));
+            foreach ($nsqdList as list($host, $port)) {
+                if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
+                    $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
+                }
+            }
+            $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
+            $this->maxConnectionNum = max(count($nsqdList), $this->maxConnectionNum);
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) { }
 
@@ -250,56 +207,13 @@ class Lookup
 
             if (--$n > 0) {
                 yield taskSleep(500);
-                yield $this->lookupWithRetry($lookupdAddr, $n);
+                yield $this->queryNSQDListWithRetry($lookupdAddr, $n);
             } else {
-                yield $lookupResult;
+                yield $nsqdList;
             }
         } else {
-            yield $lookupResult;
+            yield $nsqdList;
         }
-    }
-
-    private function getNodeList($lookupResult) {
-        $nsqdList = [];
-        $nodes = [];
-        $partitionNode = null;
-        $nodePartitions = null;
-        
-        foreach ($nsqdList as list($host, $port)) {
-            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
-                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
-            }
-        }
-        foreach ($lookupResult["producers"] as $producer) {
-            $ip = $producer["broadcast_address"];
-            $port = $producer["tcp_port"];
-            $key = "$ip:$port";
-            $nodes[$key] = [$ip, $port];
-            if (!isset($this->nsqdTCPAddrsConnNum[$key])) {
-                $this->nsqdTCPAddrsConnNum[$key] = 0;
-            }
-        }
-        if (isset($lookupResult["partitions"])) {
-            $partitionNode = [];
-            $nodePartitions = [];
-            foreach ($lookupResult["partitions"] as $partition=>$producer) {
-                $ip = $producer["broadcast_address"];
-                $port = $producer["tcp_port"];
-                $key = "$ip:$port";
-                $nodes[$key] = [$ip, $port];
-                if (!isset($this->nsqdTCPAddrsConnNum[$key])) {
-                    $this->nsqdTCPAddrsConnNum[$key] = 0;
-                }
-                $partitionNode[$partition] = $key;
-                if (!isset($nodePartitions[$key])) {
-                    $nodePartitions[$key] = [];
-                }
-                $nodePartitions[$key][]= $partition;
-            }
-        }
-        $this->partitionNode = $partitionNode;
-        $this->nodePartitions = $nodePartitions;
-        return $nodes;
     }
 
     /**
@@ -332,20 +246,10 @@ class Lookup
         for ($i = 0; $i < $remainNum; $i++) {
             try {
                 $this->nsqdTCPAddrsConnNum[$addr]++;
-                
+
                 $conn = new Connection($host, $port);
-                if ($this->rw = self::R) {
-                    $conn->setExtraIdentifyParams($this->extraIdentifyParams);
-                }
-                if (isset($this->nodePartitions[$addr])) {
-                    // TODO: specified partition
-                    $pkey = array_rand($this->nodePartitions[$addr]);
-                    $partition = $this->nodePartitions[$addr][$pkey];
-                    $conn->setPartition($partition);
-                }
-                $conn->setExtendSupport($this->extendSupport);
                 $hash = spl_object_hash($conn);
-                
+
                 try {
                     $this->pendingConnections[$hash] = $conn;
                     yield $conn->connect();
@@ -412,11 +316,11 @@ class Lookup
         }
 
         $hash = spl_object_hash($conn);
-        //$addr = $conn->getLookupAddr();
+        $addr = $conn->getLookupAddr();
 
         $reconnect = isset($this->idleConnections[$hash]) || isset($this->busyConnections[$hash]);
-        //$isQueryLookupd = isset($this->lookupdHTTPAddrs[$addr]) || ($addr === null && count($this->lookupdHTTPAddrs) > 0);
-        $isQueryLookupd = count($this->lookupdHTTPAddrs) > 0;
+        $isQueryLookupd = isset($this->lookupdHTTPAddrs[$addr]) || ($addr === null && count($this->lookupdHTTPAddrs) > 0);
+
         if ($isQueryLookupd) {
             try {
                 // trigger a poll of the lookupd
@@ -619,7 +523,7 @@ class Lookup
      * @param string $topic
      * @return \Generator
      */
-    private function lookup($addr, $topic)
+    public static function lookupNsqdList($addr, $topic)
     {
         Command::checkTopicChannelName($topic);
 
@@ -629,9 +533,16 @@ class Lookup
 
         // $host = (yield Dns::lookup($host, 1000));
         $httpClient = new HttpClient($host, $port);
-        $params = ["topic" => $topic, 'metainfo' => 'true', 'access' => $this->rw];
-        $resp = (yield $httpClient->get("/lookup", $params, NsqConfig::getNsqlookupdConnectTimeout()));
-        yield static::validLookupdResp($resp);
+        $resp = (yield $httpClient->get("/lookup", ["topic" => $topic], NsqConfig::getNsqlookupdConnectTimeout()));
+        $data = static::validLookupdResp($resp);
+
+        $nsqdList = [];
+        foreach ($data["producers"] as $producer)
+        {
+            $nsqdList[] = [$producer["broadcast_address"], $producer["tcp_port"]];
+        }
+
+        yield $nsqdList;
     }
 
     private static function validLookupdResp(Response $resp)

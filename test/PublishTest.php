@@ -11,8 +11,7 @@ require_once __DIR__ . "/boot.php";
 
 function taskPub()
 {
-    //$topic = "zan_mqworker_test";
-    $topic = "test_php_sdk";
+    $topic = "zan_mqworker_test";
 
     $oneMsg = "hello";
     $multiMsgs = [
@@ -22,19 +21,15 @@ function taskPub()
 
 
     /* @var Producer $producer */
-for (;;) {
     try {
-        $ok = (yield SQS::publish($topic, $oneMsg, ['tag'=>'testTag']));
+        $ok = (yield SQS::publish($topic, $oneMsg));
         var_dump($ok);
     } catch (\Throwable $t) {
         echo_exception($t);
     } catch (\Exception $e) {
         echo_exception($e);
     }
-    yield taskSleep(1000);
-}
 
-/*
     try {
         $ok = (yield SQS::publish($topic, "hello", "hi"));
         var_dump($ok);
@@ -45,14 +40,14 @@ for (;;) {
     }
 
     try {
-        $ok = (yield SQS::publish($topic, $multiMsgs));
+        $ok = (yield SQS::publish($topic, ...$multiMsgs));
         var_dump($ok);
     } catch (\Throwable $t) {
         echo_exception($t);
     } catch (\Exception $e) {
         echo_exception($e);
     }
-*/
+
 
     swoole_event_exit();
 }

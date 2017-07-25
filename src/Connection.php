@@ -32,7 +32,7 @@ class Connection implements Async
 
     private $port;
 
-    //private $lookupAddr;
+    private $lookupAddr;
 
     private $isBusy = false;
 
@@ -62,13 +62,6 @@ class Connection implements Async
     private $lastRdyCount = 0;
 
     private $lastMsgTimestamp;
-
-    // partition id, -1 means server not supports partition
-    private $partitionId = -1;
-    
-    private $extendSupport = false;
-
-    private $extraIdentifyParams = [];
 
     /**
      * Disposable Connection
@@ -107,21 +100,6 @@ class Connection implements Async
         $this->createClient();
     }
 
-    public function setPartition($id)
-    {
-        $this->partitionId = $id;
-    }
-    
-    public function getPartition()
-    {
-        return $this->partitionId;
-    }
-    
-    public function setExtraIdentifyParams($params)
-    {
-        $this->extraIdentifyParams = $params;
-    }
-    
     private function createClient()
     {
         $this->client = new SwooleClient(SWOOLE_TCP, SWOOLE_SOCK_ASYNC);
@@ -135,7 +113,7 @@ class Connection implements Async
             "open_tcp_nodelay" => true,
         ]);
         $this->client->on("connect", $this->onConnect());
-        $this->client->on("receive", [$this, "onIdentify"]); // Cannot destroy active lambda function
+        $this->client->on("receive", [$this, "onIdentity"]); // Cannot destroy active lambda function
         $this->client->on("error", $this->onClose(true));
         $this->client->on("close", $this->onClose());
     }
@@ -145,16 +123,6 @@ class Connection implements Async
         $this->delegate = $delegate;
     }
 
-    public function setExtendSupport($extendSupport)
-    {
-        $this->extendSupport = $extendSupport;
-    }
-
-    public function getExtendSupport()
-    {
-        return $this->extendSupport;
-    }
-    
     public function isDisposable()
     {
         return $this->isDisposable;
@@ -297,18 +265,18 @@ class Connection implements Async
     /**
      * @return string|null
      */
-    // public function getLookupAddr()
-    // {
-    //     return $this->lookupAddr;
-    // }
+    public function getLookupAddr()
+    {
+        return $this->lookupAddr;
+    }
 
     /**
      * @param string $lookupAddr
      */
-    // public function setLookupAddr($lookupAddr)
-    // {
-    //     $this->lookupAddr = $lookupAddr;
-    // }
+    public function setLookupAddr($lookupAddr)
+    {
+        $this->lookupAddr = $lookupAddr;
+    }
 
     public function onMessageFinish(Message $msg)
     {
@@ -337,41 +305,36 @@ class Connection implements Async
     {
         return function (/*SwooleClient $client*/) {
             $this->isConnected = true;
-            Timer::clearAfterJob($this->getConnectTimeoutTimerId());
-            $this->identify();
+            try {
+                Timer::clearAfterJob($this->getConnectTimeoutTimerId());
+                $this->write(Frame::MAGIC_V2);
+                $this->writeCmd(Command::identify());
+            } catch (\Throwable $t) {
+                $this->onIOError($t->getMessage());
+            } catch (\Exception $ex) {
+                $this->onIOError($ex->getMessage());
+            }
         };
     }
 
-    public function identify()
-    {
-        try {
-            $this->write(Frame::MAGIC_V2);
-            $this->writeCmd(Command::identify($this->extraIdentifyParams));
-        } catch (\Throwable $t) {
-            $this->onIOError($t->getMessage());
-        } catch (\Exception $ex) {
-            $this->onIOError($ex->getMessage());
-        }
-    }
-
-    public function onIdentify(/** @noinspection PhpUnusedParameterInspection */
+    public function onIdentity(/** @noinspection PhpUnusedParameterInspection */
         SwooleClient $client, $bytes)
     {
         try {
             $this->delegate->onReceive($this, $bytes);
             $frame = new Frame($bytes);
-            $this->confirmIdentify($frame);
+            $this->confirmIdentity($frame);
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
         }
 
         if (isset($ex)) {
-            sys_echo("nsq({$this->host}:{$this->port}) identify fail, {$ex->getMessage()}");
+            sys_echo("nsq({$this->host}:{$this->port}) identity fail, {$ex->getMessage()}");
             $this->onIOError($ex->getMessage());
         }
     }
 
-    private function confirmIdentify(Frame $frame)
+    private function confirmIdentity(Frame $frame)
     {
         $frameType = $frame->getType();
         $frameBody = $frame->getBody();
@@ -379,11 +342,11 @@ class Connection implements Async
             goto fail;
         }
 
-        $enableNegotiation = NsqConfig::getIdentify()["feature_negotiation"];
+        $enableNegotiation = NsqConfig::getIdentity()["feature_negotiation"];
         $isJson = $frameBody[0] === '{' && $enableNegotiation;
         if ($isJson) {
             $idResp = json_decode($frameBody, true, JSON_BIGINT_AS_STRING);
-            NsqConfig::negotiateIdentify($idResp);
+            NsqConfig::negotiateIdentity($idResp);
             goto success;
 
         } else {
@@ -455,7 +418,7 @@ class Connection implements Async
 
             case Frame::FrameTypeMessage:
                 try {
-                    $msg = new Message($frame->getBody(), new ConnMsgDelegate($this), $this->extendSupport);
+                    $msg = new Message($frame->getBody(), new ConnMsgDelegate($this));
                     yield $this->delegate->onMessage($this, $msg);
                 } finally {
                     $this->rdyCount--;

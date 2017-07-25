@@ -26,7 +26,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     public function __construct($topic, $maxConnectionNum = 1)
     {
         $this->topic = Command::checkTopicChannelName($topic);
-        $this->lookup = new Lookup($this->topic, Lookup::W, $maxConnectionNum);
+        $this->lookup = new Lookup($this->topic, $maxConnectionNum);
         $this->lookup->setNsqdDelegate($this);
 
         $this->stats = [
@@ -116,19 +116,12 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function publish($message, $params = [])
+    public function publish($message)
     {
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
-        $partitionId = $conn->getPartition();
-        $pubParams = [];
-        if ($partitionId >= 0) {
-            $pubParams[]= strval($partitionId);
-            if (!empty($params['tag'])) {
-                $pubParams[]= $params['tag'];
-            }
-        }
-        $conn->writeCmd(Command::publish($this->topic, $message, $pubParams));
+
+        $conn->writeCmd(Command::publish($this->topic, $message));
         $this->stats["messagesPublished"]++;
 
         $timeout = NsqConfig::getPublishTimeout();
