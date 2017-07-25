@@ -80,7 +80,7 @@ class SQS
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, $messages, $params)
+    public static function publish($topic, $messages, $params = [])
     {
         Command::checkTopicChannelName($topic);
 
