@@ -73,14 +73,19 @@ class SQS
         return true;
     }
 
+    public static function params()
+    {
+        return new MessageParam();
+    }
+
     /**
      * @param string $topic
-     * @param string[] ...$messages
-     * @param array $params
+     * @param string[] $messages
+     * @param MessageParam $params
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, $messages, $params = [])
+    public static function publish($topic, $messages, $params = null)
     {
         Command::checkTopicChannelName($topic);
 

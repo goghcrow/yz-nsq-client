@@ -134,9 +134,25 @@ class Command
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public static function publish($topic, $body, $params = [])
+    public static function publish($topic, $body, $partition = null)
     {
-        return static::cmdWithBody("PUB", $body, array_merge([$topic], $params));
+        $args = [$topic];
+        if (!empty($partition)) {
+            $args[]= $partition;
+        }
+        return static::cmdWithBody("PUB", $body, $args);
+    }
+    
+    public static function publishWithExtends($topic, $body, $partition = null, $params = [])
+    {
+        $args = [$topic];
+        if (!empty($partition)) {
+            $args[]= $partition;
+            if (!empty($params)) {
+                $args[]= json_encode($params);
+            }
+        }
+        return static::cmdWithBody("PUB", $body, $args);
     }
 
     /**
@@ -151,7 +167,7 @@ class Command
      */
     public static function deferredPublish($topic, $delay, $body)
     {
-        return "DPUB $topic $delay\n" . pack('N', strlen($body)) . $body;
+        return static::cmdWithBody("DPUB", $body, array_merge([$topic, $delay], $params));
     }
 
     /**

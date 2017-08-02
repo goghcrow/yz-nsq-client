@@ -11,6 +11,7 @@ use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;
 
 
+
 class Producer implements ConnDelegate, NsqdDelegate, Async
 {
     // 每个topic共享一个Producer实例
@@ -116,19 +117,17 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public function publish($message, $params = [])
+    public function publish($message, $params)
     {
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
         $partitionId = $conn->getPartition();
-        $pubParams = [];
-        if ($partitionId >= 0) {
-            $pubParams[]= strval($partitionId);
-            if (!empty($params['tag'])) {
-                $pubParams[]= $params['tag'];
-            }
+        if (empty($params)) {
+            $cmd = Command::publish($this->topic, $message, $partitionId);
+        } else {
+            $cmd = Command::publishWithExtends($this->topic, $message, $partitionId, $params->toArray());
         }
-        $conn->writeCmd(Command::publish($this->topic, $message, $pubParams));
+        $conn->writeCmd($cmd);
         $this->stats["messagesPublished"]++;
 
         $timeout = NsqConfig::getPublishTimeout();

@@ -21,7 +21,13 @@ class Message
      * @var string
      */
     private $tag;
-
+    
+    /**
+     * Message extends
+     * @var MessageParam
+     */
+    private $extData;
+    
     /**
      * Message payload
      * @var string
@@ -105,6 +111,14 @@ class Message
     public function getTag()
     {
         return $this->tag;
+    }
+    
+    /**
+     * @return MessageParam
+     */
+    public function getParams()
+    {
+        return $this->extData;
     }
 
     /**
@@ -215,7 +229,7 @@ class Message
      *                         (uint16)                                           1-byte   (uint16)
      *                          2-bytes                                  extend data ver   2-bytes 
      *                         attempts                                                    extend data length 
- 
+     *
      */
     private function unpack($bytes)
     {
@@ -235,8 +249,14 @@ class Message
             if ($ver > 0) {
                 $extLen = $binary->readUInt16BE();
                 $extData = $binary->read($extLen);
-                if ($ver == 2) {
+                switch ($ver) {
+                case 2:
                     $this->tag = $extData;
+                    break;
+                case 4:
+                    $this->extData = MessageParam::fromArray(json_decode($extData));
+                    $this->tag = $this->extData->getTag();
+                    break;
                 }
             }
         }
