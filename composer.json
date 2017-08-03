@@ -7,6 +7,7 @@
         }
     },
     "require": {
+        "zanphp/spi": "dev-master",
         "zanphp/zan": "dev-master"
     },
     "autoload": {
