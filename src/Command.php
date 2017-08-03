@@ -148,10 +148,11 @@ class Command
         $args = [$topic];
         if (!empty($partition)) {
             $args[]= $partition;
-            if (!empty($params)) {
-                $args[]= json_encode($params);
-            }
+            
         }
+        //[2-byte header length][json header data]
+        $extStr = json_encode(params);
+        $body = pack('n', strlen($extStr)) . $extStr . $body;
         return static::cmdWithBody("PUB", $body, $args);
     }
 
