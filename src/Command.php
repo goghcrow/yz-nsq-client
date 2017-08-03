@@ -134,25 +134,23 @@ class Command
      *  E_BAD_MESSAGE
      *  E_MPUB_FAILED
      */
-    public static function publish($topic, $body, $partition = null)
+    public static function publish($topic, $body, $partition = -1)
     {
         $args = [$topic];
-        if (!empty($partition)) {
+        if ($partition >= 0) {
             $args[]= $partition;
         }
         return static::cmdWithBody("PUB", $body, $args);
     }
     
-    public static function publishWithExtends($topic, $body, $partition = null, $params = [])
+    public static function publishWithExtends($topic, $body, $partition = -1, $params = [])
     {
         $args = [$topic];
-        if (!empty($partition)) {
+        if ($partition >= 0) {
             $args[]= $partition;
-            if (!empty($params)) {
-                $args[]= json_encode($params);
-            }
+            $args[]= json_encode($params);
         }
-        return static::cmdWithBody("PUB", $body, $args);
+        return static::cmdWithBody("PUB_EXT", $body, $args);
     }
 
     /**
