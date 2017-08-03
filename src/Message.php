@@ -6,7 +6,7 @@ use Zan\Framework\Components\Nsq\Contract\MsgDelegate;
 use Zan\Framework\Components\Nsq\Utils\Binary;
 use Zan\Framework\Components\Nsq\Utils\ObjectPool;
 use Zan\Framework\Utilities\Types\Time;
-
+use Zan\Framework\Utilities\Types\Json;
 
 class Message
 {
@@ -254,7 +254,7 @@ class Message
                     $this->tag = $extData;
                     break;
                 case 4:
-                    $this->extData = MessageParam::fromArray(json_decode($extData));
+                    $this->extData = MessageParam::fromArray(Json::decode($extData));
                     $this->tag = $this->extData->getTag();
                     break;
                 }
