@@ -127,7 +127,7 @@ class SQS
             if (count($messages) === 1) {
                 $resp = (yield $producer->publish($messages[0], $params));
             } else {
-                $resp = (yield $producer->multiPublish($messages, $params));
+                $resp = (yield $producer->multiPublish($messages));
             }
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
