@@ -116,18 +116,23 @@ class SQS
 
         $producer = InitializeSQS::$producers[$topic];
         $retry = NsqConfig::getPublishRetry();
-        yield self::publishWithRetry($producer, $topic, $messages, $params, $retry);
+        if (empty($params)) {
+            yield self::publishWithRetry($producer, $topic, $messages, $params, $retry);
+        } else {
+            foreach ($messages as $message) {
+                yield self::publishWithRetry($producer, $topic, $message, $params, $retry);
+            }
+        }
     }
 
     private static function publishWithRetry(Producer $producer, $topic, $messages, $params, $n = 3)
     {
         $resp = null;
-
         try {
-            if (count($messages) === 1) {
-                $resp = (yield $producer->publish($messages[0], $params));
+            if (is_array($messages)) {
+                $resp = (yield $producer->multiPublish($messages)); // mpub not supports extends
             } else {
-                $resp = (yield $producer->multiPublish($messages));
+                $resp = (yield $producer->publish($messages, $params));
             }
         } catch (\Throwable $ex) {
         } catch (\Exception $ex) {
