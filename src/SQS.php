@@ -135,6 +135,11 @@ class SQS
 
         if ($resp === "OK") {
             yield true;
+        } elseif (substr($resp, 0, 2) == "OK" && strlen($resp) == 30) {
+            // resp of pub trace
+            // 2 + 8 + 8 + 8 + 4 == 30
+            //OK(2-bytes)+[8-byte internal id]+[8-byte trace id from client]+[8-byte internal disk queue offset]+[4 bytes internal disk queue data size]
+            yield unpack('H16internal/H16trace/H16offset/H8size', substr($resp, 2));
         } else {
             if (--$n > 0) {
                 if ($resp === "E_BAD_TOPIC") {
@@ -144,7 +149,7 @@ class SQS
                 $msg = isset($ex) ? $ex->getMessage() : "";
                 sys_error("publish fail <$msg>, retry [topic=$topic, n=$i]");
                 yield taskSleep(100 * $i);
-                yield self::publishWithRetry($producer, $topic, $messages, $n);
+                yield self::publishWithRetry($producer, $topic, $messages, $params, $n);
             } else {
                 $previous = isset($ex) ? $ex : null;
                 throw  new NsqException("publish [$topic] fail", 0, $previous, [
