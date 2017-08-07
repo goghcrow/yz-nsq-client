@@ -12,9 +12,10 @@ require_once __DIR__ . "/boot.php";
 function taskPub()
 {
     //$topic = "zan_mqworker_test";
-    $topic = "test_php_sdk";
+    $topic = "test_php_sdk_ext";
+    //$topic = "test_php_ext";
 
-    $oneMsg = "hello";
+    $oneMsg = "hello世界";
     $multiMsgs = [
         "hello",
         "hi",
@@ -24,14 +25,17 @@ function taskPub()
     /* @var Producer $producer */
 for (;;) {
     try {
-        $ok = (yield SQS::publish($topic, $oneMsg, ['tag'=>'testTag']));
+        $ok = (yield SQS::publish($topic, $oneMsg, SQS::params()
+                                                                  ->withTag('TestTag')
+                                                                  //->withTraceId('1984')
+                                                                  ));
         var_dump($ok);
     } catch (\Throwable $t) {
         echo_exception($t);
     } catch (\Exception $e) {
         echo_exception($e);
     }
-    yield taskSleep(1000);
+    yield taskSleep(100);
 }
 
 /*
