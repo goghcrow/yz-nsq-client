@@ -334,7 +334,11 @@ class Lookup
                 $this->nsqdTCPAddrsConnNum[$addr]++;
                 
                 $conn = new Connection($host, $port);
+                $conn->setExtendSupport($this->extendSupport);
                 if ($this->rw == self::R) {
+                    if ($this->extendSupport) {
+                        $this->extraIdentifyParams["extend_support"] = true;
+                    }
                     $conn->setExtraIdentifyParams($this->extraIdentifyParams);
                 }
                 if (isset($this->nodePartitions[$addr])) {
@@ -343,7 +347,6 @@ class Lookup
                     $partition = $this->nodePartitions[$addr][$pkey];
                     $conn->setPartition($partition);
                 }
-                $conn->setExtendSupport($this->extendSupport);
                 $hash = spl_object_hash($conn);
                 
                 try {
@@ -639,7 +642,7 @@ class Lookup
         $statusCode = $resp->getStatusCode();
         $body = $resp->getBody();
         if ($statusCode !== 200) {
-            throw new NsqException("queryLookupd failed [http_status_code=$statusCode]");
+            throw new NsqException("queryLookupd failed [http_status_code=$statusCode] $body");
         }
 
         $respArr = json_decode($resp->getBody(), true, 512, JSON_BIGINT_AS_STRING);
