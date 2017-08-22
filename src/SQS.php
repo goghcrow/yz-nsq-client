@@ -38,7 +38,7 @@ class SQS
         $maxInFlight = $maxInFlight > 0 ? $maxInFlight : NsqConfig::getMaxInFlightCount();
         $consumer->changeMaxInFlight($maxInFlight ?: $maxInFlight);
 
-        $desiredTag = (yield static::getServiceChainValue());
+        $desiredTag = (yield static::getServiceChainName());
         if (!$desiredTag) {
             $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : '';
         }
@@ -121,12 +121,12 @@ class SQS
             yield Lock::unlock(__CLASS__);
         }
 
-        $chainValue = (yield getRpcContext("service-chain-value"));
-        if ($chainValue) {
+        $chainName = (yield getContext("service-chain-name"));
+        if ($chainName && is_scalar($chainName)) {
              if (!$params instanceof MessageParam) {
                  $params = new MessageParam();
              }
-             $params->withTag($chainValue);
+             $params->withTag($chainName);
         }
 
         $producer = InitializeSQS::$producers[$topic];
@@ -202,11 +202,11 @@ class SQS
         return $stat;
     }
 
-    private static function getServiceChainValue()
+    private static function getServiceChainName()
     {
-        $chainValue = (yield getContext("service-chain-value"));
+        $chainName = (yield getContext("service-chain-name"));
 
-        if (!$chainValue) {
+        if (!$chainName) {
             $container = Container::getInstance();
             if ($container->has(ServiceChainer::class)) {
                 $serviceChain = $container->make(ServiceChainer::class);
@@ -214,9 +214,14 @@ class SQS
                 if ($chainValue) {
                     yield setContext("service-chain-value", $chainValue);
                 }
+
+                if (isset($chainValue["name"])) {
+                    $chainName = $chainValue["name"];
+                    yield setContext("service-chain-name", $chainName);
+                }
             }
         }
 
-        yield $chainValue;
+        yield $chainName;
     }
 }
