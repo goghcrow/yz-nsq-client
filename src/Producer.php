@@ -106,6 +106,7 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     /**
      * Publish a message to a topic
      * @param string $message
+     * @param MessageParam $params
      * @throws NsqException
      * @return \Generator
      *

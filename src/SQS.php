@@ -6,6 +6,8 @@ namespace Zan\Framework\Components\Nsq;
 use Zan\Framework\Components\Nsq\Contract\MsgHandler;
 use Zan\Framework\Components\Nsq\Utils\Lock;
 use Zan\Framework\Utilities\Types\Json;
+use ZanPHP\Container\Container;
+use ZanPHP\Contracts\ServiceChain\ServiceChainer;
 
 class SQS
 {
@@ -36,7 +38,11 @@ class SQS
         $maxInFlight = $maxInFlight > 0 ? $maxInFlight : NsqConfig::getMaxInFlightCount();
         $consumer->changeMaxInFlight($maxInFlight ?: $maxInFlight);
 
-        $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : '';
+        $desiredTag = (yield static::getServiceChainValue());
+        if (!$desiredTag) {
+            $desiredTag = isset($options['desiredTag']) ? strval($options['desiredTag']) : '';
+        }
+
         $consumer->setDesiredTag($desiredTag);
         
         $lookup = NsqConfig::getLookup();
@@ -48,6 +54,7 @@ class SQS
             InitializeSQS::$consumers["$topic:$channel"] = [];
         }
         InitializeSQS::$consumers["$topic:$channel"][] = $consumer;
+
 
         if (!is_array($lookup)) {
             $lookup = [$lookup];
@@ -112,6 +119,14 @@ class SQS
             }
         } finally {
             yield Lock::unlock(__CLASS__);
+        }
+
+        $chainValue = (yield getRpcContext("service-chain-value"));
+        if ($chainValue) {
+             if (!$params instanceof MessageParam) {
+                 $params = new MessageParam();
+             }
+             $params->withTag($chainValue);
         }
 
         $producer = InitializeSQS::$producers[$topic];
@@ -185,5 +200,23 @@ class SQS
             $stat["producer"][$topic] = $producer->stats();
         }
         return $stat;
+    }
+
+    private static function getServiceChainValue()
+    {
+        $chainValue = (yield getContext("service-chain-value"));
+
+        if (!$chainValue) {
+            $container = Container::getInstance();
+            if ($container->has(ServiceChainer::class)) {
+                $serviceChain = $container->make(ServiceChainer::class);
+                $chainValue = $serviceChain->getChainValue(ServiceChainer::TYPE_JOB);
+                if ($chainValue) {
+                    yield setContext("service-chain-value", $chainValue);
+                }
+            }
+        }
+
+        yield $chainValue;
     }
 }

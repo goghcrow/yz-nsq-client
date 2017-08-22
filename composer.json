@@ -8,7 +8,10 @@
     },
     "require": {
         "zanphp/spi": "dev-master",
-        "zanphp/zan": "dev-master"
+        "zanphp/zan": "dev-master",
+        "zanphp/container": "dev-master",
+        "zanphp/contracts": "dev-master",
+        "zanphp/service-chain": "dev-master"
     },
     "autoload": {
         "psr-4": {
