@@ -32,7 +32,8 @@ class TestMsgHandler implements MsgHandler
 $task1 = function() {
     //$topic = "zan_mqworker_test";
     $topic = "test_php_ext";
-    $topic = "test_php_sdk_ext";
+    //$topic = "test_php";
+    //$topic = "test_php_sdk_ext";
     //$ch = "ch1";
     $ch = "default";
 
