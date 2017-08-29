@@ -196,7 +196,6 @@ class Lookup
         if (isset($lookupResult['meta']['extend_support']) && $lookupResult['meta']['extend_support']) {
             $this->extendSupport = true;
         }
-        $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         $nsqdList = $this->getNodeList($lookupResult);
         $this->lookupdHTTPAddrs[$lookupdAddr] = $nsqdList;
         yield $this->connectToNSQDList($nsqdList);
