@@ -44,6 +44,21 @@ for (;;) {
         $ok = (yield SQS::publish($topic, [$oneMsg,$oneMsg], SQS::params()->withTag('TestTag')));
         var_dump($ok);
 */
+        $ok = (yield SQS::publishMulti($topic, $multiMsgs));
+        var_dump($ok);
+
+        $ok = (yield SQS::publishMulti($topic, $multiMsgs, SQS::params()));
+        var_dump($ok);
+
+        echo "next\n";
+/*
+        $ok = (yield SQS::publishMulti($topic, $oneMsg, SQS::params()->withTag('TestTag')));
+        var_dump($ok);
+
+        $ok = (yield SQS::publish($topic, [$oneMsg,$oneMsg], SQS::params()->withTag('TestTag')));
+        var_dump($ok);
+*/
+
 
     } catch (\Throwable $t) {
         echo_exception($t);
