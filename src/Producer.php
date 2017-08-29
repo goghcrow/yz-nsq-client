@@ -123,10 +123,14 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
         $partitionId = $conn->getPartition();
-        if (empty($params)) {
+        $paramArray = null;
+        if (is_object($params)) {
+            $paramArray = $params->toArray();
+        }
+        if (empty($paramArray)) {
             $cmd = Command::publish($this->topic, $message, $partitionId);
         } else {
-            $cmd = Command::publishWithExtends($this->topic, $message, $partitionId, $params->toArray());
+            $cmd = Command::publishWithExtends($this->topic, $message, $partitionId, $paramArray);
         }
         $conn->writeCmd($cmd);
         $this->stats["messagesPublished"]++;

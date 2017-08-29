@@ -31,6 +31,8 @@ class Connection implements Async
     private $host;
 
     private $port;
+    
+    private $addr;
 
     //private $lookupAddr;
 
@@ -99,6 +101,7 @@ class Connection implements Async
     {
         $this->host = $host;
         $this->port = $port;
+        $this->addr = "$host:$port";
         if ($delegate === null) {
             $this->delegate = NopConnDelegate::getInstance();
         } else {
@@ -240,7 +243,7 @@ class Connection implements Async
 
     public function getAddr()
     {
-        return "$this->host:$this->port";
+        return $this->addr;
     }
 
     /**

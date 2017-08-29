@@ -87,12 +87,50 @@ class SQS
 
     /**
      * @param string $topic
+     * @param mixed $message
+     * @param MessageParam $params
+     * @return \Generator yield bool
+     * @throws NsqException
+     */
+    public static function publish($topic, $message, $params = null)
+    {
+        if (is_scalar($message)) {
+            $message = strval($message);
+        } else {
+            $message = Json::encode($message);
+        }
+        return self::publishStrings($topic, [$message], $params);
+    }
+
+
+    /**
+     * @param string $topic
+     * @param mixed[] $messages
+     * @param MessageParam $params
+     * @return \Generator yield bool
+     * @throws NsqException
+     */
+    public static function publishMulti($topic, $messages, $params = null)
+    {
+        $messages = array_filter((array) $messages);
+        foreach ($messages as $i => $message) {
+            if (is_scalar($message)) {
+                $messages[$i] = strval($message);
+            } else {
+                $messages[$i] = Json::encode($message);
+            }
+        }
+        return self::publishStrings($topic, $messages, $params);
+    }
+
+    /**
+     * @param string $topic
      * @param string[] $messages
      * @param MessageParam $params
      * @return \Generator yield bool
      * @throws NsqException
      */
-    public static function publish($topic, $messages, $params = [])
+    private static function publishStrings($topic, $messages, $params = [])
     {
         Command::checkTopicChannelName($topic);
 
@@ -104,14 +142,15 @@ class SQS
         if (empty($messages)) {
             throw new NsqException("empty messages");
         }
+        /*
         foreach ($messages as $i => $message) {
             if (is_scalar($message)) {
-                $messages[$i] = /*strval(*/$message/*)*/;
+                $messages[$i] = strval($message);
             } else {
                 $messages[$i] = Json::encode($message);
             }
         }
-
+        */
         yield Lock::lock(__CLASS__);
         try {
             if (!isset(InitializeSQS::$producers[$topic])) {

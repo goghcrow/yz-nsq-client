@@ -47,3 +47,4 @@ class MessageParam {
         return $ret;
     }
 }
+

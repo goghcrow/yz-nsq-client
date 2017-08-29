@@ -265,11 +265,6 @@ class Lookup
         $partitionNode = null;
         $nodePartitions = null;
         
-        foreach ($nsqdList as list($host, $port)) {
-            if (!isset($this->nsqdTCPAddrsConnNum["$host:$port"])) {
-                $this->nsqdTCPAddrsConnNum["$host:$port"] = 0;
-            }
-        }
         foreach ($lookupResult["producers"] as $producer) {
             $ip = $producer["broadcast_address"];
             $port = $producer["tcp_port"];
@@ -332,7 +327,6 @@ class Lookup
         for ($i = 0; $i < $remainNum; $i++) {
             try {
                 $this->nsqdTCPAddrsConnNum[$addr]++;
-                
                 $conn = new Connection($host, $port);
                 $conn->setExtendSupport($this->extendSupport);
                 if ($this->rw == self::R) {
@@ -549,7 +543,8 @@ class Lookup
         unset($this->pendingConnections[$key]);
         unset($this->idleConnections[$key]);
         unset($this->busyConnections[$key]);
-        $this->nsqdTCPAddrsConnNum[$conn->getAddr()]--;
+        $addr = $conn->getAddr();
+        $this->nsqdTCPAddrsConnNum[$addr]--;
     }
 
     public function stop()

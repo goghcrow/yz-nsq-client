@@ -13,7 +13,8 @@ function taskPub()
 {
 //    $topic = "zan_mqworker_test";
 //    $topic = "test_php_sdk_ext";
-    $topic = "test_php_ext";
+    //$topic = "test_php_ext";
+    $topic = "test_php";
 
     $oneMsg = "hello世界";
     $multiMsgs = [
@@ -25,11 +26,25 @@ function taskPub()
     /* @var Producer $producer */
 for (;;) {
     try {
-        $ok = (yield SQS::publish($topic, $oneMsg, SQS::params()
-                                                                  ->withTag('TestTag')
-                                                                  //->withTraceId('1984')
-                                                                  ));
+        $ok = (yield SQS::publish($topic, $oneMsg));
         var_dump($ok);
+
+        $ok = (yield SQS::publish($topic, [$oneMsg,$oneMsg]));
+        var_dump($ok);
+
+        $ok = (yield SQS::publish($topic, $oneMsg, SQS::params()));
+        var_dump($ok);
+
+        $ok = (yield SQS::publish($topic, [$oneMsg,$oneMsg], SQS::params()));
+        var_dump($ok);
+/*
+        $ok = (yield SQS::publish($topic, $oneMsg, SQS::params()->withTag('TestTag')));
+        var_dump($ok);
+
+        $ok = (yield SQS::publish($topic, [$oneMsg,$oneMsg], SQS::params()->withTag('TestTag')));
+        var_dump($ok);
+*/
+
     } catch (\Throwable $t) {
         echo_exception($t);
     } catch (\Exception $e) {

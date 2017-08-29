@@ -8,16 +8,14 @@
 return [
     // ["必填"]lookup 节点地址
     "lookup" => [
-        "http://sqs-qa.s.qima-inc.com:4161"
-//        "http://qabb-qa-nsqtest0:4161"
+//        "http://sqs-qa.s.qima-inc.com:4161"
+        "http://qabb-qa-nsqtest0:4161"
     ],
 
     // ["建议填写"] 需要publish的topic列表, 预先配置, 会在workerStart时候建立好连接
     "topic" => [
-//        "test_php_sdk",
-//        "test_php_sdk_ext"
-        "test_php",
-        "test_php_ext"
+        //"test_php",
+        //"test_php_ext"
     ],
 
     // ====================================== 以下选择性配置 ====================================
