@@ -250,9 +250,9 @@ class Lookup
 
             if (--$n > 0) {
                 yield taskSleep(500);
-                yield $this->lookupWithRetry($lookupdAddr, $n);
+                yield $this->lookupWithRetry(null, $n);
             } else {
-                yield $lookupResult;
+                return;
             }
         } else {
             yield $lookupResult;
