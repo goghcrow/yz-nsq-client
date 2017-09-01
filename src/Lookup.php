@@ -192,7 +192,11 @@ class Lookup
      */
     public function queryLookupd($lookupdAddr = null)
     {
-        $lookupResult = (yield $this->lookupWithRetry($lookupdAddr, $this->lookupRetries));
+        $result = (yield $this->lookupWithRetry($lookupdAddr, $this->lookupRetries));
+        if ($result === null) {
+            return;
+        }
+        list($lookupResult, $lookupdAddr) = $result;
         if (isset($lookupResult['meta']['extend_support']) && $lookupResult['meta']['extend_support']) {
             $this->extendSupport = true;
         }
@@ -255,7 +259,7 @@ class Lookup
                 return;
             }
         } else {
-            yield $lookupResult;
+            yield [$lookupResult, $lookupdAddr];
         }
     }
 
