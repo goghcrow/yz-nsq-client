@@ -9,7 +9,8 @@ use Zan\Framework\Foundation\Contract\Async;
 use Zan\Framework\Foundation\Core\Debug;
 use Zan\Framework\Foundation\Coroutine\Task;
 use Zan\Framework\Network\Server\Timer\Timer;
-
+use ZanPHP\Contracts\Trace\Constant;
+use ZanPHP\Trace\Trace;
 
 
 class Producer implements ConnDelegate, NsqdDelegate, Async
@@ -23,6 +24,11 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     private $lookup;
 
     private $stats;
+
+    /** @var  Trace */
+    private $trace;
+    private $traceHandle;
+    private $ctx;
 
     public function __construct($topic, $maxConnectionNum = 1)
     {
@@ -120,6 +126,12 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      */
     public function publish($message, $params)
     {
+        $this->trace = (yield getContext('trace'));
+
+        if ($this->trace) {
+            $this->traceHandle = $this->trace->transactionBegin(Constant::NSQ_PUB, $this->topic);
+            $this->ctx = $message;
+        }
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
         $partitionId = $conn->getPartition();
@@ -163,6 +175,12 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
      */
     public function multiPublish(array $messages)
     {
+        $this->trace = (yield getContext('trace'));
+
+        if ($this->trace) {
+            $this->traceHandle = $this->trace->transactionBegin(Constant::NSQ_PUB, $this->topic);
+            $this->ctx = var_export($messages, true);
+        }
         /* @var Connection $conn */
         list($conn) = (yield $this->take());
         $conn->writeCmd(Command::multiPublish($this->topic, $messages));
@@ -269,6 +287,13 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     {
         Timer::clearAfterJob($this->getPublishTimeoutTimerId($conn));
 
+        if ($this->trace) {
+            if ($ex === null) {
+                $this->trace->commit($this->traceHandle, Constant::SUCCESS);
+            } else {
+                $this->trace->commit($this->traceHandle, $ex->getMessage()." ".$this->ctx);
+            }
+        }
         $this->release($conn);
 
         $hash = spl_object_hash($conn);
@@ -285,6 +310,10 @@ class Producer implements ConnDelegate, NsqdDelegate, Async
     private function onPublishTimeout(Connection $conn)
     {
         return function() use($conn) {
+            if ($this->trace) {
+                $this->trace->commit($this->traceHandle, "publish timeout: ".$this->ctx);
+                $this->trace = null;
+            }
             $connHash = spl_object_hash($conn);
             if (isset($this->callbacks[$connHash])) {
                 $callback = $this->callbacks[$connHash];
