@@ -85,7 +85,7 @@ final class Lock implements Async
 
     public static function unlock($lockName)
     {
-        yield static::get($lockName)->unlock_();
+        static::get($lockName)->unlock_();
     }
 
     /**

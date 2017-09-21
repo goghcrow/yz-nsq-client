@@ -157,7 +157,7 @@ class SQS
                 yield InitializeSQS::initProducers([$topic => NsqConfig::getMaxConnectionPerTopic()]);
             }
         } finally {
-            yield Lock::unlock(__CLASS__);
+            Lock::unlock(__CLASS__);
         }
 
         $chainName = (yield getContext("service-chain-name"));
